@@ -1,0 +1,59 @@
+{
+    "teacher_name": "Ms. Kalpana P",
+    "entries": [
+        {
+            "day": 1,
+            "period": 2,
+            "subject": "Gujarati",
+            "class": "4-Jasmine"
+        },
+        {
+            "day": 1,
+            "period": 3,
+            "subject": "Hindi Reading",
+            "class": "5-Tulip"
+        },
+        {
+            "day": 1,
+            "period": 5,
+            "subject": "Library",
+            "class": "6-Rose"
+        },
+        {
+            "day": 1,
+            "period": 7,
+            "subject": "Hindi",
+            "class": "3-Orchid"
+        },
+        {
+            "day": 2,
+            "period": 8,
+            "subject": "Library",
+            "class": "3-Orchid"
+        },
+        {
+            "day": 3,
+            "period": 7,
+            "subject": "Gujarati",
+            "class": "3-Jasmine"
+        },
+        {
+            "day": 4,
+            "period": 4,
+            "subject": "Library",
+            "class": "3-Rose"
+        },
+        {
+            "day": 5,
+            "period": 8,
+            "subject": "Library",
+            "class": "6-Tulip"
+        },
+        {
+            "day": 6,
+            "period": 1,
+            "subject": "Gujarati",
+            "class": "5-Tulip"
+        }
+    ]
+}

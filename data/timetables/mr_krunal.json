@@ -1,0 +1,131 @@
+{
+    "teacher_name": "Mr. Krunal",
+    "entries": [
+        {
+            "day": 1,
+            "period": 4,
+            "subject": "PT",
+            "class": "9-Orchid"
+        },
+        {
+            "day": 1,
+            "period": 6,
+            "subject": "PT",
+            "class": "10-Rose"
+        },
+        {
+            "day": 1,
+            "period": 7,
+            "subject": "PT",
+            "class": "6-Tulip"
+        },
+        {
+            "day": 1,
+            "period": 8,
+            "subject": "PT",
+            "class": "12-Commerce"
+        },
+        {
+            "day": 2,
+            "period": 4,
+            "subject": "PT",
+            "class": "11-Commerce"
+        },
+        {
+            "day": 2,
+            "period": 5,
+            "subject": "PT",
+            "class": "6-Orchid"
+        },
+        {
+            "day": 2,
+            "period": 6,
+            "subject": "PT",
+            "class": "10-Rose"
+        },
+        {
+            "day": 2,
+            "period": 8,
+            "subject": "PT",
+            "class": "9-Rose"
+        },
+        {
+            "day": 3,
+            "period": 4,
+            "subject": "PT",
+            "class": "11-Commerce"
+        },
+        {
+            "day": 3,
+            "period": 5,
+            "subject": "PT",
+            "class": "6-Jasmine"
+        },
+        {
+            "day": 3,
+            "period": 6,
+            "subject": "PT",
+            "class": "9-Jasmine"
+        },
+        {
+            "day": 3,
+            "period": 7,
+            "subject": "PT",
+            "class": "10-Jasmine"
+        },
+        {
+            "day": 3,
+            "period": 8,
+            "subject": "PT",
+            "class": "6-Rose"
+        },
+        {
+            "day": 4,
+            "period": 4,
+            "subject": "PT",
+            "class": "7-Rose"
+        },
+        {
+            "day": 4,
+            "period": 5,
+            "subject": "PT",
+            "class": "7-Jasmine"
+        },
+        {
+            "day": 4,
+            "period": 6,
+            "subject": "PT",
+            "class": "10-Jasmine"
+        },
+        {
+            "day": 4,
+            "period": 8,
+            "subject": "PT",
+            "class": "8-Rose"
+        },
+        {
+            "day": 5,
+            "period": 5,
+            "subject": "PT",
+            "class": "8-Orchid"
+        },
+        {
+            "day": 5,
+            "period": 6,
+            "subject": "PT",
+            "class": "7-Orchid"
+        },
+        {
+            "day": 5,
+            "period": 7,
+            "subject": "PT",
+            "class": "12-Commerce"
+        },
+        {
+            "day": 5,
+            "period": 8,
+            "subject": "PT",
+            "class": "8-Jasmine"
+        }
+    ]
+}

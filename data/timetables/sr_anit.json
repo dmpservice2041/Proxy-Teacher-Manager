@@ -1,0 +1,35 @@
+{
+    "teacher_name": "Sr. Anit",
+    "entries": [
+        {
+            "day": 1,
+            "period": 5,
+            "subject": "Value Education",
+            "class": "7-Jasmine"
+        },
+        {
+            "day": 2,
+            "period": 6,
+            "subject": "Value Education",
+            "class": "6-Rose"
+        },
+        {
+            "day": 2,
+            "period": 7,
+            "subject": "Value Education",
+            "class": "7-Jasmine"
+        },
+        {
+            "day": 3,
+            "period": 7,
+            "subject": "Value Education",
+            "class": "6-Rose"
+        },
+        {
+            "day": 4,
+            "period": 4,
+            "subject": "Value Education",
+            "class": "8-Rose"
+        }
+    ]
+}

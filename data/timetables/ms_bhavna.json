@@ -1,0 +1,34 @@
+{
+  "teacher_name": "Ms. Bhavna",
+  "entries": [
+    {"day": 1, "period": 2, "subject": "Sanskrit", "class": "7-Orchid"},
+    {"day": 1, "period": 3, "subject": "Library", "class": "5-Rose"},
+    {"day": 1, "period": 5, "subject": "Sanskrit", "class": "8-Rose"},
+    {"day": 1, "period": 6, "subject": "Hindi", "class": "8-Jasmine"},
+    {"day": 1, "period": 7, "subject": "Sanskrit", "class": "8-Orchid"},
+    {"day": 1, "period": 8, "subject": "Sanskrit", "class": "6-Jasmine"},
+    {"day": 2, "period": 4, "subject": "Hindi", "class": "6-Tulip"},
+    {"day": 2, "period": 5, "subject": "Sanskrit", "class": "7-Rose"},
+    {"day": 2, "period": 6, "subject": "Sanskrit", "class": "9-Orchid"},
+    {"day": 2, "period": 7, "subject": "Hindi", "class": "8-Jasmine"},
+    {"day": 2, "period": 8, "subject": "Hindi", "class": "6-Rose"},
+    {"day": 3, "period": 4, "subject": "Hindi", "class": "7-Jasmine"},
+    {"day": 3, "period": 5, "subject": "Hindi", "class": "6-Tulip"},
+    {"day": 3, "period": 6, "subject": "Sanskrit", "class": "6-Jasmine"},
+    {"day": 3, "period": 7, "subject": "Hindi", "class": "8-Jasmine"},
+    {"day": 3, "period": 8, "subject": "Sanskrit", "class": "8-Rose"},
+    {"day": 4, "period": 2, "subject": "Hindi", "class": "6-Rose"},
+    {"day": 4, "period": 3, "subject": "Sanskrit", "class": "8-Orchid"},
+    {"day": 4, "period": 5, "subject": "Sanskrit", "class": "9-Orchid"},
+    {"day": 4, "period": 6, "subject": "Hindi", "class": "6-Rose"},
+    {"day": 4, "period": 7, "subject": "Sanskrit", "class": "7-Orchid"},
+    {"day": 5, "period": 2, "subject": "Hindi", "class": "6-Tulip"},
+    {"day": 5, "period": 4, "subject": "Sanskrit", "class": "9-Orchid"},
+    {"day": 5, "period": 5, "subject": "Sanskrit", "class": "7-Rose"},
+    {"day": 5, "period": 7, "subject": "Sanskrit", "class": "8-Rose"},
+    {"day": 5, "period": 8, "subject": "Hindi", "class": "7-Jasmine"},
+    {"day": 6, "period": 1, "subject": "Sanskrit", "class": "8-Orchid"},
+    {"day": 6, "period": 2, "subject": "Hindi", "class": "7-Jasmine"}
+  ]
+}
+

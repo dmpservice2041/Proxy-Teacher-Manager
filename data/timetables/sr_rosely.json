@@ -1,0 +1,41 @@
+{
+    "teacher_name": "Sr. Rosely",
+    "entries": [
+        {
+            "day": 1,
+            "period": 7,
+            "subject": "Value Education",
+            "class": "3-Jasmine"
+        },
+        {
+            "day": 2,
+            "period": 5,
+            "subject": "Value Education",
+            "class": "5-Orchid"
+        },
+        {
+            "day": 3,
+            "period": 4,
+            "subject": "Value Education",
+            "class": "4-Rose"
+        },
+        {
+            "day": 4,
+            "period": 6,
+            "subject": "Value Education",
+            "class": "3-Jasmine"
+        },
+        {
+            "day": 5,
+            "period": 3,
+            "subject": "Value Education",
+            "class": "5-Orchid"
+        },
+        {
+            "day": 5,
+            "period": 5,
+            "subject": "Value Education",
+            "class": "4-Rose"
+        }
+    ]
+}

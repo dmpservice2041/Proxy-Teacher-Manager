@@ -1,0 +1,10 @@
+vendor/
+exports/
+temp/
+*.xlsx
+*.pdf
+*.log
+.DS_Store
+timetable_backup.json
+temp_timetable.json
+import_report.json

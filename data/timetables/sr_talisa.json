@@ -1,0 +1,125 @@
+{
+    "teacher_name": "Sr. Talisa",
+    "entries": [
+        {
+            "day": 1,
+            "period": 3,
+            "subject": "Value Education",
+            "class": "1-Tulip"
+        },
+        {
+            "day": 1,
+            "period": 4,
+            "subject": "Value Education",
+            "class": "2-Jasmine"
+        },
+        {
+            "day": 1,
+            "period": 6,
+            "subject": "English Reading",
+            "class": "2-Tulip"
+        },
+        {
+            "day": 1,
+            "period": 7,
+            "subject": "English",
+            "class": "1-Rose"
+        },
+        {
+            "day": 1,
+            "period": 8,
+            "subject": "English",
+            "class": "2-Rose"
+        },
+        {
+            "day": 2,
+            "period": 2,
+            "subject": "English",
+            "class": "2-Rose"
+        },
+        {
+            "day": 2,
+            "period": 4,
+            "subject": "English Reading",
+            "class": "1-Jasmine"
+        },
+        {
+            "day": 2,
+            "period": 5,
+            "subject": "Cursive Writing",
+            "class": "2-Orchid"
+        },
+        {
+            "day": 2,
+            "period": 6,
+            "subject": "English",
+            "class": "1-Rose"
+        },
+        {
+            "day": 3,
+            "period": 3,
+            "subject": "English",
+            "class": "2-Rose"
+        },
+        {
+            "day": 3,
+            "period": 5,
+            "subject": "English",
+            "class": "1-Rose"
+        },
+        {
+            "day": 4,
+            "period": 2,
+            "subject": "English",
+            "class": "2-Rose"
+        },
+        {
+            "day": 4,
+            "period": 5,
+            "subject": "English",
+            "class": "2-Rose"
+        },
+        {
+            "day": 4,
+            "period": 7,
+            "subject": "English",
+            "class": "1-Rose"
+        },
+        {
+            "day": 4,
+            "period": 8,
+            "subject": "Cursive Writing",
+            "class": "1-Tulip"
+        },
+        {
+            "day": 5,
+            "period": 3,
+            "subject": "English",
+            "class": "2-Rose"
+        },
+        {
+            "day": 5,
+            "period": 4,
+            "subject": "Value Education",
+            "class": "2-Jasmine"
+        },
+        {
+            "day": 5,
+            "period": 7,
+            "subject": "English",
+            "class": "1-Rose"
+        },
+        {
+            "day": 5,
+            "period": 8,
+            "subject": "Value Education",
+            "class": "1-Tulip"
+        },
+        {
+            "day": 6,
+            "period": 3,
+            "subject": "English",
+            "class": "1-Rose"
+        }
+    ]
+}
