@@ -3,6 +3,7 @@ require_once 'config/app.php';
 require_once 'includes/header.php';
 require_once 'services/ProxyEngine.php';
 require_once 'reports/ProxyExcelReport.php';
+require_once 'services/ProxyAllocationService.php';
 
 // Quick Stats Handling (Assuming implementation in services, or raw query here)
 // For simplicity, we'll instantiate services but direct DB might be faster for dashboard KPI.
@@ -21,8 +22,16 @@ $stmt->execute([$today]);
 $proxyCount = $stmt->fetchColumn();
 
 // KPI 3: Coverage %
-$coverage = ($absentCount > 0) ? round(($proxyCount / ($absentCount * 4)) * 100, 1) : 100; // Rough calc (assuming 4 stats per teacher? No, exact slot matching needed).
 // Let's just show raw numbers.
+
+// Fetch All Absent Slots for the new logic
+$allocationService = new ProxyAllocationService();
+$allSlots = $allocationService->getAbsentSlots($today);
+
+$pendingSlots = array_filter($allSlots, function($s) {
+    return empty($s['assigned_proxy_id']);
+});
+$notAllocatedCount = count($pendingSlots);
 
 // Handle Generate Action
 $message = '';
@@ -68,13 +77,24 @@ $assignments = $stmt->fetchAll();
                 <div class="card-header">Proxies Assigned</div>
                 <div class="card-body">
                     <h5 class="card-title"><?php echo $proxyCount; ?></h5>
-                    <p class="card-text small">Total slots covered for today.</p>
+                    <p class="card-text small">Total slots covered today.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- KPI 3: Not Allocations (Pending) -->
+        <div class="col-md-3">
+            <div class="card text-white bg-warning mb-3 shadow-sm">
+                <div class="card-header">Not Allocations</div>
+                <div class="card-body">
+                    <h5 class="card-title"><?php echo $notAllocatedCount; ?></h5>
+                    <p class="card-text small">Pending proxy assignments.</p>
                 </div>
             </div>
         </div>
 
         <!-- Action 1: Allocation Tool -->
-        <div class="col-md-3">
+        <div class="col-md-3 d-none d-md-block">
             <div class="card text-white bg-primary mb-3 shadow-sm">
                 <div class="card-header text-white">Proxy Allocation</div>
                 <div class="card-body">
@@ -91,7 +111,7 @@ $assignments = $stmt->fetchAll();
             <div class="card text-white bg-info mb-3 shadow-sm">
                 <div class="card-header text-white">Documentation</div>
                 <div class="card-body">
-                    <h5 class="card-title text-white">Daily Reports</h5>
+                    <h5 class="card-title text-white">Reports Center</h5>
                     <a href="reports.php?date=<?php echo $today; ?>" class="btn btn-light btn-sm w-100">
                         <i class="fas fa-file-excel"></i> View/Print Reports
                     </a>
@@ -138,6 +158,40 @@ $assignments = $stmt->fetchAll();
                         <?php endforeach; ?>
                     <?php else: ?>
                         <tr><td colspan="6" class="text-center">No assignments found for today.</td></tr>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+    <div class="card mt-4 border-warning">
+        <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
+            <span>Today's Not Allocations (Pending)</span>
+            <a href="proxy_allocation.php" class="btn btn-dark btn-sm">Assign Now</a>
+        </div>
+        <div class="card-body">
+            <table class="table table-striped table-hover">
+                <thead>
+                    <tr>
+                        <th class="text-center">Period</th>
+                        <th>Class</th>
+                        <th>Absent Teacher</th>
+                        <th>Subject</th>
+                        <th class="text-center">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if (count($pendingSlots) > 0): ?>
+                        <?php foreach($pendingSlots as $slot): ?>
+                        <tr>
+                            <td class="text-center"><span class="badge bg-secondary"><?php echo $slot['period_no']; ?></span></td>
+                            <td><?php echo $slot['standard'] . '-' . $slot['division']; ?></td>
+                            <td><?php echo htmlspecialchars($slot['teacher_name']); ?></td>
+                            <td><?php echo htmlspecialchars($slot['subject_name']); ?></td>
+                            <td class="text-center">
+                                <span class="badge bg-danger">NOT ALLOCATED</span>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <tr><td colspan="5" class="text-center text-success fw-bold"><i class="fas fa-check-circle"></i> All periods have been allocated!</td></tr>
                     <?php endif; ?>
                 </tbody>
             </table>

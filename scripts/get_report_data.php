@@ -28,7 +28,7 @@ try {
         )
         LEFT JOIN subjects s ON tt.subject_id = s.id
         WHERE pa.date = ?
-        ORDER BY pa.period_no ASC
+        ORDER BY t_absent.name, pa.period_no
     ");
     $stmt->execute([$dayOfWeek, $date]);
     $data = $stmt->fetchAll(PDO::FETCH_ASSOC);

@@ -37,16 +37,22 @@ $date = $_GET['date'] ?? date('Y-m-d');
                     <ul class="list-group list-group-flush" id="recentFilesList">
                         <?php 
                         $files = glob("exports/Proxy_Report_*.xlsx");
-                        rsort($files);
-                        $files = array_slice($files, 0, 10);
+                        // Sort by modification time (newest first)
+                        usort($files, function($a, $b) {
+                            return filemtime($b) - filemtime($a);
+                        });
+                        $files = array_slice($files, 0, 5);
                         if (empty($files)): ?>
                             <li class="list-group-item text-muted small">No reports found</li>
                         <?php else: ?>
                             <?php foreach ($files as $f): ?>
-                                <li class="list-group-item d-flex justify-content-between align-items-center small">
-                                    <a href="<?php echo $f; ?>" class="text-decoration-none truncate" title="<?php echo $f; ?>">
-                                        <i class="fas fa-file-excel text-success me-1"></i> <?php echo str_replace('exports/Proxy_Report_', '', str_replace('.xlsx', '', $f)); ?>
-                                    </a>
+                                <li class="list-group-item d-flex justify-content-between align-items-center small py-1">
+                                    <div class="truncate">
+                                        <a href="<?php echo $f; ?>?v=<?php echo filemtime($f); ?>" class="text-decoration-none fw-bold" title="<?php echo $f; ?>">
+                                            <i class="fas fa-file-excel text-success me-1"></i> <?php echo date("d M Y", strtotime(str_replace(['exports/Proxy_Report_', '.xlsx'], '', $f))); ?>
+                                        </a>
+                                        <div class="text-muted" style="font-size: 0.7rem;">Generated: <?php echo date("h:i A", filemtime($f)); ?></div>
+                                    </div>
                                     <span class="badge bg-light text-dark border"><?php echo round(filesize($f)/1024, 1); ?> KB</span>
                                 </li>
                             <?php endforeach; ?>
@@ -157,17 +163,21 @@ $(document).ready(function() {
             success: function(response) {
                 $btn.html(originalHtml).prop('disabled', false);
                 if (response.success) {
-                    const filename = response.files.excel;
+                    const filename = response.files.excel + '?v=' + new Date().getTime();
+                    
+                    // Auto-download
+                    window.location.href = filename;
+
                     $('#statusMessage').html(`
                         <div class="alert alert-success d-flex justify-content-between align-items-center">
-                            <span><i class="fas fa-check-circle me-1"></i> Report generated successfully!</span>
+                            <span><i class="fas fa-check-circle me-1"></i> Report generated! Downloading automatically...</span>
                             <a href="${filename}" class="btn btn-sm btn-light border" download>
-                                <i class="fas fa-download me-1"></i> Download Now
+                                <i class="fas fa-download me-1"></i> Manual Download
                             </a>
                         </div>
                     `);
-                    // Reload the recent files list (simple page refresh for now or dynamic append)
-                    location.reload(); 
+                    // Reload the recent files list after a short delay so user sees the success message
+                    setTimeout(() => location.reload(), 2000); 
                 } else {
                     $('#statusMessage').html(`<div class="alert alert-danger">Error: ${response.error}</div>`);
                 }

@@ -115,6 +115,20 @@ $activeCount = count($teachers);
 // 3. Present is Active - Absent (Assuming default is Present)
 $presentCount = $activeCount - $absentCount;
 
+// Fetch full names for the absent modal
+$absentList = $service->getAbsentTeachers($date);
+
+// Process full lists for other modals
+$presentList = [];
+$activeList = $teachers; // Already fetched and sorted
+
+foreach ($teachers as $t) {
+    $att = $attendanceMap[$t['id']] ?? null;
+    if ($att && $att['status'] == 'Present') {
+        $presentList[] = $t;
+    }
+}
+
 // Sort teachers by Empcode for display consistency with screenshot
 usort($teachers, function($a, $b) {
     return (int)($a['empcode'] ?? 0) - (int)($b['empcode'] ?? 0);
@@ -136,6 +150,9 @@ usort($teachers, function($a, $b) {
                     <i class="fas fa-cloud-download-alt"></i> Fetch from API
                 </button>
             </form>
+            <button type="button" id="btnSyncToErp" class="btn btn-warning me-2">
+                <i class="fas fa-sync"></i> Sync to ERP
+            </button>
             <form method="POST" onsubmit="return confirm('WARNING: Are you sure you want to delete ALL attendance data for this date? This cannot be undone.');">
                 <input type="hidden" name="delete_attendance" value="1">
                 <button type="submit" class="btn btn-danger">
@@ -162,7 +179,7 @@ usort($teachers, function($a, $b) {
     <div class="row mb-4">
         <!-- Active Employees -->
         <div class="col-md-4">
-            <div class="card border-primary h-100">
+            <div class="card border-primary h-100" style="cursor: pointer;" data-bs-toggle="modal" data-bs-target="#activeModal">
                 <div class="row g-0 h-100">
                     <div class="col-4 bg-primary text-white d-flex align-items-center justify-content-center">
                         <i class="fas fa-users fa-2x"></i>
@@ -170,7 +187,8 @@ usort($teachers, function($a, $b) {
                     <div class="col-8">
                         <div class="card-body text-center p-2">
                             <h3 class="card-title text-primary fw-bold mb-0"><?php echo $activeCount; ?></h3>
-                            <p class="card-text text-muted small">Active Emp.</p>
+                            <p class="card-text text-muted small mb-0">Active Emp.</p>
+                            <span class="badge bg-primary rounded-pill" style="font-size: 0.7rem;">Click to view</span>
                         </div>
                     </div>
                 </div>
@@ -179,7 +197,7 @@ usort($teachers, function($a, $b) {
 
         <!-- Present Employees -->
         <div class="col-md-4">
-            <div class="card border-success h-100">
+            <div class="card border-success h-100" style="cursor: pointer;" data-bs-toggle="modal" data-bs-target="#presentModal">
                 <div class="row g-0 h-100">
                     <div class="col-4 bg-success text-white d-flex align-items-center justify-content-center">
                         <i class="fas fa-check fa-2x"></i>
@@ -187,7 +205,8 @@ usort($teachers, function($a, $b) {
                     <div class="col-8">
                         <div class="card-body text-center p-2">
                             <h3 class="card-title text-success fw-bold mb-0"><?php echo $presentCount; ?></h3>
-                            <p class="card-text text-muted small">Present Emp.</p>
+                            <p class="card-text text-muted small mb-0">Present Emp.</p>
+                            <span class="badge bg-success rounded-pill" style="font-size: 0.7rem;">Click to view</span>
                         </div>
                     </div>
                 </div>
@@ -196,7 +215,7 @@ usort($teachers, function($a, $b) {
 
         <!-- Absent Employees -->
         <div class="col-md-4">
-            <div class="card border-danger h-100">
+            <div class="card border-danger h-100" style="cursor: pointer;" data-bs-toggle="modal" data-bs-target="#absentModal">
                 <div class="row g-0 h-100">
                     <div class="col-4 bg-danger text-white d-flex align-items-center justify-content-center">
                         <i class="fas fa-times fa-2x"></i>
@@ -204,7 +223,8 @@ usort($teachers, function($a, $b) {
                     <div class="col-8">
                         <div class="card-body text-center p-2">
                             <h3 class="card-title text-danger fw-bold mb-0"><?php echo $absentCount; ?></h3>
-                            <p class="card-text text-muted small">Absent Emp.</p>
+                            <p class="card-text text-muted small mb-0">Absent Emp.</p>
+                            <span class="badge bg-danger rounded-pill" style="font-size: 0.7rem;">Click to view</span>
                         </div>
                     </div>
                 </div>
@@ -268,7 +288,15 @@ usort($teachers, function($a, $b) {
                             $inTime = $att['in_time'] ?? '--:--';
                             $outTime = $att['out_time'] ?? '--:--';
                             $isActive = $t['is_active'] == 1;
-                            $rowClass = !$isActive ? 'table-secondary text-muted' : '';
+                            
+                            $rowClass = '';
+                            if (!$isActive) {
+                                $rowClass = 'table-secondary text-muted';
+                            } elseif ($isAbsent) {
+                                $rowClass = 'table-danger';
+                            } else {
+                                $rowClass = 'table-success';
+                            }
                         ?>
                         <tr class="<?php echo $rowClass; ?>">
                             <td>
@@ -297,6 +325,124 @@ usort($teachers, function($a, $b) {
     </div>
 </div>
 
+<!-- Absent Teachers Modal -->
+<div class="modal fade" id="absentModal" tabindex="-1" aria-labelledby="absentModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="absentModalLabel">Absent Teachers (<?php echo $date; ?>)</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-0">
+                <?php if (empty($absentList)): ?>
+                    <div class="p-3 text-center text-muted italic">No teachers are marked absent for today.</div>
+                <?php else: ?>
+                    <ul class="list-group list-group-flush">
+                        <?php foreach ($absentList as $at): ?>
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <div>
+                                    <span class="fw-bold"><?php echo htmlspecialchars($at['name']); ?></span>
+                                    <div class="small text-muted">Empcode: <?php echo htmlspecialchars($at['empcode'] ?? '-'); ?></div>
+                                </div>
+                                <span class="badge bg-danger rounded-pill">Absent</span>
+                            </li>
+                        <?php endforeach; ?>
+                    </ul>
+                <?php endif; ?>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Active Teachers Modal -->
+<div class="modal fade" id="activeModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">All Active Teachers</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-0">
+                <ul class="list-group list-group-flush">
+                    <?php foreach ($activeList as $at): ?>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <span class="fw-bold"><?php echo htmlspecialchars($at['name']); ?></span>
+                                <div class="small text-muted">Empcode: <?php echo htmlspecialchars($at['empcode'] ?? '-'); ?></div>
+                            </div>
+                            <span class="badge bg-success">Active</span>
+                        </li>
+                    <?php endforeach; ?>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Present Teachers Modal -->
+<div class="modal fade" id="presentModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title">Present Teachers (<?php echo $date; ?>)</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-0">
+                <?php if (empty($presentList)): ?>
+                    <div class="p-3 text-center text-muted">No teachers are marked present yet.</div>
+                <?php else: ?>
+                    <ul class="list-group list-group-flush">
+                        <?php foreach ($presentList as $pt): ?>
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <div>
+                                    <span class="fw-bold"><?php echo htmlspecialchars($pt['name']); ?></span>
+                                    <div class="small text-muted">Empcode: <?php echo htmlspecialchars($pt['empcode'] ?? '-'); ?></div>
+                                </div>
+                                <span class="badge bg-success">Present</span>
+                            </li>
+                        <?php endforeach; ?>
+                    </ul>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+$(document).ready(function() {
+    $('#btnSyncToErp').on('click', function() {
+        if (!confirm('Are you sure you want to push current attendance to the ERP?')) return;
+        
+        const $btn = $(this);
+        const originalHtml = $btn.html();
+        
+        $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Syncing...');
+        
+        $.ajax({
+            url: 'scripts/push_attendance_to_erp.php',
+            type: 'GET',
+            data: { date: '<?php echo $date; ?>' },
+            success: function(response) {
+                if (response.success) {
+                    alert('Sync Successful!\nRecords sent: ' + response.records_sent + '\n\nAPI Response: ' + JSON.stringify(response.api_response));
+                } else {
+                    alert('Sync Failed: ' + response.message);
+                }
+            },
+            error: function(xhr, status, error) {
+                alert('Connection Error: ' + error);
+            },
+            complete: function() {
+                $btn.prop('disabled', false).html(originalHtml);
+            }
+        });
+    });
+});
+</script>
 </body>
 </html>

@@ -73,7 +73,7 @@ class ProxyExcelReport {
             $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(16);
             $sheet->getStyle('A1')->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
             
-            $sheet->setCellValue('A2', "Daily Proxy Report - $date");
+            $sheet->setCellValue('A2', "Daily Proxy Report - " . date('d-m-Y', strtotime($date)));
             $sheet->mergeCells('A2:G2');
             $sheet->getStyle('A2')->getFont()->setBold(true)->setSize(14);
             $sheet->getStyle('A2')->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
@@ -85,7 +85,7 @@ class ProxyExcelReport {
         }
 
         // Header
-        $headers = ['Date', 'Period', 'Class', 'Subject', 'Absent Teacher', 'Proxy Teacher', 'Mode'];
+        $headers = ['Date', 'Period', 'Class', 'Subject', 'Absent Teacher', 'Proxy Teacher', 'Sign'];
         $col = 'A';
         foreach ($headers as $header) {
             $cell = $col . $startRow;
@@ -98,13 +98,16 @@ class ProxyExcelReport {
         // Rows
         $row = $startRow + 1;
         foreach ($data as $record) {
-            $sheet->setCellValue('A' . $row, $record['date']);
+            $sheet->setCellValue('A' . $row, date('d-m-Y', strtotime($record['date'])));
             $sheet->setCellValue('B' . $row, $record['period_no']);
             $sheet->setCellValue('C' . $row, $record['class_name']);
             $sheet->setCellValue('D' . $row, $record['subject_name']);
             $sheet->setCellValue('E' . $row, $record['absent_teacher']);
             $sheet->setCellValue('F' . $row, $record['proxy_teacher']);
-            $sheet->setCellValue('G' . $row, $record['mode']);
+            $sheet->setCellValue('G' . $row, ""); // Sign column is blank for physical signature
+            
+            // Set double row height
+            $sheet->getRowDimension($row)->setRowHeight(40); 
             $row++;
         }
 
@@ -169,7 +172,7 @@ class ProxyExcelReport {
             )
             LEFT JOIN subjects s ON tt.subject_id = s.id
             WHERE pa.date = ?
-            ORDER BY pa.period_no
+            ORDER BY t_absent.name, pa.period_no
         ");
         $stmt->execute([$dayOfWeek, $date]);
         return $stmt->fetchAll();

@@ -43,9 +43,14 @@ class Attendance {
         return $stmt->execute([$date]);
     }
 
-    // Get all attendance records for a date
+    // Get all attendance records for a date with teacher empcode
     public function getAllForDate($date) {
-        $stmt = $this->pdo->prepare("SELECT * FROM teacher_attendance WHERE date = ?");
+        $stmt = $this->pdo->prepare("
+            SELECT ta.*, t.empcode 
+            FROM teacher_attendance ta
+            JOIN teachers t ON ta.teacher_id = t.id
+            WHERE ta.date = ?
+        ");
         $stmt->execute([$date]);
         return $stmt->fetchAll();
     }
