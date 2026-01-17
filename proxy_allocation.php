@@ -190,6 +190,15 @@ $absentSlots = $allocationService->getAbsentSlots($date);
     }
 
     /* Select2 Customization */
+    /* Hide uninitialized select to prevent FOUC */
+    select.candidate-select:not(.select2-hidden-accessible) {
+        opacity: 0;
+        height: 0;
+        width: 0;
+        position: absolute;
+        overflow: hidden;
+    }
+
     .select2-container--default .select2-selection--single {
         border: 1px solid #e2e8f0;
         border-radius: 0.5rem;
@@ -896,11 +905,69 @@ $(document).ready(function() {
 
     // 5. Auto Generate Handler
     $('#btnAutoAllocate').on('click', function() {
-        if (!confirm('This will automatically assign the best matching teacher for ALL empty slots. \n\nLogic:\n- Prioritizes Same Section\n- Prioritizes Subject Expertise\n- Avoids huge priority gaps\n\nContinue?')) {
-            return;
-        }
+        showAutoGenerateConfirmModal();
+    });
+    
+    function showAutoGenerateConfirmModal() {
+        const modalHtml = `
+            <div class="modal fade" id="autoGenerateConfirmModal" tabindex="-1">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content border-0 shadow-lg">
+                        <div class="modal-header border-0 pb-2" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                            <h5 class="modal-title text-white fw-bold">
+                                <i class="fas fa-magic me-2"></i>Auto Generate Proxies
+                            </h5>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body py-4">
+                            <div class="text-center mb-3">
+                                <i class="fas fa-robot" style="font-size: 3rem; color: #667eea;"></i>
+                            </div>
+                            <h5 class="fw-bold text-center mb-3">Automatically Assign All Empty Slots?</h5>
+                            <p class="text-muted text-center mb-4">This will use smart logic to assign the best matching teacher for each unassigned slot.</p>
+                            
+                            <div class="card bg-light border-0 mb-3">
+                                <div class="card-body py-3">
+                                    <h6 class="fw-semibold mb-2"><i class="fas fa-cog me-2 text-primary"></i>Assignment Logic:</h6>
+                                    <ul class="mb-0 small">
+                                        <li>Prioritizes teachers from the same section</li>
+                                        <li>Considers subject expertise</li>
+                                        <li>Avoids large priority gaps</li>
+                                        <li>Prevents teacher overloading</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer border-0 pt-0">
+                            <button type="button" class="btn btn-light" data-bs-dismiss="modal">
+                                <i class="fas fa-times me-2"></i>Cancel
+                            </button>
+                            <button type="button" class="btn btn-primary" id="btnConfirmAutoGenerate">
+                                <i class="fas fa-bolt me-2"></i>Generate Now
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
         
-        const $btn = $(this);
+        $('#autoGenerateConfirmModal').remove();
+        $('body').append(modalHtml);
+        
+        // Allow DOM to update before showing modal
+        setTimeout(() => {
+            const modal = new bootstrap.Modal(document.getElementById('autoGenerateConfirmModal'));
+            modal.show();
+            
+            $('#btnConfirmAutoGenerate').off('click').on('click', function() {
+                modal.hide();
+                executeAutoGenerate();
+            });
+        }, 100);
+    }
+    
+    function executeAutoGenerate() {
+        const $btn = $('#btnAutoAllocate');
         const originalHtml = $btn.html();
         $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Processing...');
         
@@ -911,22 +978,83 @@ $(document).ready(function() {
             dataType: 'json',
             success: function(response) {
                 if (response.success) {
-                    alert(`Auto-Generated ${response.count} assignments!\n\nCheck the log for details?`);
-                    // Reload to show assignments
-                    location.reload();
+                    showAutoGenerateResultModal(response.count);
                 } else {
-                    alert('Error: ' + response.message);
+                    showAutoGenerateErrorModal(response.message);
                 }
             },
             error: function(xhr) {
-                alert('Connection error occurred.');
+                showAutoGenerateErrorModal('Connection error occurred. Please try again.');
                 console.error(xhr.responseText);
             },
             complete: function() {
                 $btn.prop('disabled', false).html(originalHtml);
             }
         });
-    });
+    }
+    
+    function showAutoGenerateResultModal(count) {
+        const modalHtml = `
+            <div class="modal fade" id="autoGenerateResultModal" tabindex="-1">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content border-0 shadow-lg">
+                        <div class="modal-header border-0 pb-0">
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body text-center pt-0 pb-4">
+                            <div class="mb-3">
+                                <i class="fas fa-check-circle text-success" style="font-size: 3.5rem;"></i>
+                            </div>
+                            <h4 class="fw-bold mb-2">Auto-Generation Complete!</h4>
+                            <p class="text-muted mb-4">Successfully assigned proxies to empty slots</p>
+                            
+                            <div class="d-inline-block px-4 py-3 rounded" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                                <div class="fw-bold text-white" style="font-size: 2.5rem;">${count}</div>
+                                <div class="small text-white opacity-75">Assignments Created</div>
+                            </div>
+                            
+                            <button type="button" class="btn btn-primary px-4 mt-4" onclick="location.reload()">
+                                <i class="fas fa-sync-alt me-2"></i>Reload & View Assignments
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        $('#autoGenerateResultModal').remove();
+        $('body').append(modalHtml);
+        const modal = new bootstrap.Modal(document.getElementById('autoGenerateResultModal'));
+        modal.show();
+    }
+    
+    function showAutoGenerateErrorModal(errorMessage) {
+        const modalHtml = `
+            <div class="modal fade" id="autoGenerateErrorModal" tabindex="-1">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content border-0 shadow-lg">
+                        <div class="modal-header border-0 bg-danger bg-opacity-10">
+                            <h5 class="modal-title text-danger">
+                                <i class="fas fa-exclamation-triangle me-2"></i>Auto-Generation Failed
+                            </h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p class="mb-0">${errorMessage}</p>
+                        </div>
+                        <div class="modal-footer border-0">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        $('#autoGenerateErrorModal').remove();
+        $('body').append(modalHtml);
+        const modal = new bootstrap.Modal(document.getElementById('autoGenerateErrorModal'));
+        modal.show();
+    }
 });
 </script>
 </body>

@@ -944,9 +944,64 @@ $(document).ready(function() {
     });
 
     $('#btnSyncToErp').on('click', function() {
-        if (!confirm('Are you sure you want to push current attendance to the ERP?')) return;
+        showSyncConfirmModal();
+    });
+    
+    function showSyncConfirmModal() {
+        const modalHtml = `
+            <div class="modal fade" id="syncConfirmModal" tabindex="-1">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content border-0 shadow-lg">
+                        <div class="modal-header border-0 pb-2" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                            <h5 class="modal-title text-white fw-bold">
+                                <i class="fas fa-sync-alt me-2"></i>Sync to ERP
+                            </h5>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body text-center py-4">
+                            <div class="mb-3">
+                                <i class="fas fa-cloud-upload-alt" style="font-size: 3.5rem; color: #667eea;"></i>
+                            </div>
+                            <h5 class="fw-bold mb-2">Push Attendance to ERP?</h5>
+                            <p class="text-muted mb-0">This will send today's attendance records to the ERP system.</p>
+                            <div class="mt-3 p-3 rounded" style="background: #f8f9fa;">
+                                <small class="text-muted">
+                                    <i class="fas fa-calendar-day me-1"></i>
+                                    Date: <span class="fw-semibold"><?php echo date('F j, Y', strtotime($date)); ?></span>
+                                </small>
+                            </div>
+                        </div>
+                        <div class="modal-footer border-0 pt-0">
+                            <button type="button" class="btn btn-light" data-bs-dismiss="modal">
+                                <i class="fas fa-times me-2"></i>Cancel
+                            </button>
+                            <button type="button" class="btn btn-primary" id="btnConfirmSync">
+                                <i class="fas fa-paper-plane me-2"></i>Sync Now
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
         
-        const $btn = $(this);
+        $('#syncConfirmModal').remove();
+        $('body').append(modalHtml);
+        
+        // Allow DOM to update before showing modal
+        setTimeout(() => {
+            const modal = new bootstrap.Modal(document.getElementById('syncConfirmModal'));
+            modal.show();
+            
+            // Add event listener for Sync Now button
+            $('#btnConfirmSync').off('click').on('click', function() {
+                modal.hide();
+                executeSyncToErp();
+            });
+        }, 100);
+    }
+    
+    function executeSyncToErp() {
+        const $btn = $('#btnSyncToErp');
         const originalHtml = $btn.html();
         
         $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Syncing...');
@@ -957,20 +1012,152 @@ $(document).ready(function() {
             data: { date: '<?php echo $date; ?>' },
             success: function(response) {
                 if (response.success) {
-                    alert('Sync Successful!\nRecords sent: ' + response.records_sent + '\n\nAPI Response: ' + JSON.stringify(response.api_response));
-                    location.reload();
+                    showSyncResultModal(response);
                 } else {
-                    alert('Sync Failed: ' + response.message);
+                    showSyncErrorModal(response.message || 'Unknown error occurred');
                 }
             },
             error: function(xhr, status, error) {
-                alert('Connection Error: ' + error);
+                showSyncErrorModal('Connection error: Unable to reach ERP server. Please check your network connection.');
             },
             complete: function() {
                 $btn.prop('disabled', false).html(originalHtml);
             }
         });
-    });
+    }
+    
+    function showSyncResultModal(response) {
+        const apiResponse = response.api_response || {};
+        const recordsSent = response.records_sent || 0;
+        const recordsSkipped = response.records_skipped || 0;
+        const totalRecords = response.total_records || recordsSent;
+        const skippedDetails = response.skipped_details || [];
+        const httpStatus = apiResponse.httpStatusCode || apiResponse.HTTPStatusCode || 'Unknown';
+        const errorMsg = apiResponse.Error || apiResponse.error || '';
+        const resultStatus = apiResponse.Result?.result || apiResponse.result || 'Unknown';
+        const valueMsg = apiResponse.Value || apiResponse.value || '';
+        
+        let statusBadge = '';
+        let statusIcon = '';
+        let messageText = '';
+        
+        if (httpStatus == 200 && (resultStatus === 'updated' || resultStatus.toLowerCase() === 'success')) {
+            statusBadge = '<span class="badge bg-success">Success</span>';
+            statusIcon = '<i class="fas fa-check-circle text-success" style="font-size: 3rem;"></i>';
+            messageText = valueMsg || 'Attendance records synchronized successfully';
+        } else if (errorMsg) {
+            statusBadge = '<span class="badge bg-danger">Error</span>';
+            statusIcon = '<i class="fas fa-exclamation-circle text-danger" style="font-size: 3rem;"></i>';
+            messageText = errorMsg;
+        } else {
+            statusBadge = '<span class="badge bg-warning">Partial</span>';
+            statusIcon = '<i class="fas fa-info-circle text-warning" style="font-size: 3rem;"></i>';
+            messageText = 'Sync completed with warnings';
+        }
+        
+        // Build skipped records list if any
+        let skippedSection = '';
+        if (recordsSkipped > 0 && skippedDetails.length > 0) {
+            let skippedList = '';
+            skippedDetails.forEach(skip => {
+                skippedList += `
+                    <div class="d-flex justify-content-between align-items-center py-2 border-bottom">
+                        <div>
+                            <div class="fw-semibold small">${skip.name}</div>
+                            <div class="text-muted" style="font-size: 0.75rem;">Emp: ${skip.empcode}</div>
+                        </div>
+                        <span class="badge bg-light text-dark">${skip.reason}</span>
+                    </div>
+                `;
+            });
+            
+            skippedSection = `
+                <div class="mt-4">
+                    <button class="btn btn-sm btn-outline-warning w-100" type="button" data-bs-toggle="collapse" data-bs-target="#skippedList">
+                        <i class="fas fa-exclamation-triangle me-2"></i>${recordsSkipped} Record${recordsSkipped > 1 ? 's' : ''} Not Sent
+                        <i class="fas fa-chevron-down ms-2"></i>
+                    </button>
+                    <div class="collapse mt-2" id="skippedList">
+                        <div class="card card-body" style="max-height: 250px; overflow-y: auto;">
+                            ${skippedList}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        const modalHtml = `
+            <div class="modal fade" id="syncResultModal" tabindex="-1">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content border-0 shadow-lg">
+                        <div class="modal-header border-0 pb-0">
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body text-center pt-0 pb-4">
+                            <div class="mb-3">${statusIcon}</div>
+                            <h4 class="fw-bold mb-3">ERP Sync ${statusBadge}</h4>
+                            <p class="text-muted mb-4">${messageText}</p>
+                            
+                            <div class="d-flex justify-content-center gap-4 mb-3">
+                                <div class="text-center">
+                                    <div class="fw-bold" style="font-size: 2rem; color: #10b981;">${recordsSent}</div>
+                                    <div class="small text-muted">Sent</div>
+                                </div>
+                                ${recordsSkipped > 0 ? `
+                                <div class="text-center">
+                                    <div class="fw-bold" style="font-size: 2rem; color: #f59e0b;">${recordsSkipped}</div>
+                                    <div class="small text-muted">Skipped</div>
+                                </div>
+                                ` : ''}
+                                <div class="text-center">
+                                    <div class="fw-bold" style="font-size: 2rem; color: #667eea;">${totalRecords}</div>
+                                    <div class="small text-muted">Total</div>
+                                </div>
+                            </div>
+                            
+                            ${skippedSection}
+                            
+                            <button type="button" class="btn btn-primary px-4 mt-3" data-bs-dismiss="modal" onclick="location.reload()">
+                                <i class="fas fa-check me-2"></i>Close & Refresh
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Remove existing modal if any
+        $('#syncResultModal').remove();
+        $('body').append(modalHtml);
+        const modal = new bootstrap.Modal(document.getElementById('syncResultModal'));
+        modal.show();
+    }
+    
+    function showSyncErrorModal(errorMessage) {
+        const modalHtml = `
+            <div class="modal fade" id="syncErrorModal" tabindex="-1">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content border-0 shadow-lg">
+                        <div class="modal-header border-0 bg-danger bg-opacity-10">
+                            <h5 class="modal-title text-danger"><i class="fas fa-exclamation-triangle me-2"></i>Sync Failed</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p class="mb-0">${errorMessage}</p>
+                        </div>
+                        <div class="modal-footer border-0">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        $('#syncErrorModal').remove();
+        $('body').append(modalHtml);
+        const modal = new bootstrap.Modal(document.getElementById('syncErrorModal'));
+        modal.show();
+    }
 });
 </script>
 </body>

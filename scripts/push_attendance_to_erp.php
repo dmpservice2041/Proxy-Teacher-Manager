@@ -25,6 +25,9 @@ try {
     }
 
     $payload = [];
+    $skippedRecords = [];
+    $totalRecords = count($attendanceRecords);
+    
     foreach ($attendanceRecords as $record) {
         // We only push "presents" as punch logs to the ERP
         if ($record['status'] === 'Present' && !empty($record['in_time'])) {
@@ -39,11 +42,32 @@ try {
                 'empUniqueID' => (string)$empId,
                 'punchDateTime' => $punchDateTime
             ];
+        } else {
+            // Track why this record was skipped
+            $reason = '';
+            if ($record['status'] !== 'Present') {
+                $reason = 'Status: ' . $record['status'];
+            } elseif (empty($record['in_time'])) {
+                $reason = 'No punch time';
+            }
+            
+            $skippedRecords[] = [
+                'name' => $record['name'] ?? 'Unknown',
+                'empcode' => $record['empcode'] ?? 'N/A',
+                'reason' => $reason
+            ];
         }
     }
 
     if (empty($payload)) {
-        echo json_encode(['success' => false, 'message' => 'No "Present" records with punch times to sync.']);
+        echo json_encode([
+            'success' => false, 
+            'message' => 'No "Present" records with punch times to sync.',
+            'total_records' => $totalRecords,
+            'records_sent' => 0,
+            'records_skipped' => count($skippedRecords),
+            'skipped_details' => $skippedRecords
+        ]);
         exit;
     }
 
@@ -76,12 +100,15 @@ try {
     if ($curlError) {
         echo json_encode(['success' => false, 'message' => 'CURL Error: ' . $curlError]);
     } else {
-        // Return the exact response from the ERP API
+        // Return the exact response from the ERP API with detailed breakdown
         echo json_encode([
             'success' => $httpCode >= 200 && $httpCode < 300,
             'api_response' => json_decode($response, true) ?: $response,
             'http_code' => $httpCode,
-            'records_sent' => count($payload)
+            'total_records' => $totalRecords,
+            'records_sent' => count($payload),
+            'records_skipped' => count($skippedRecords),
+            'skipped_details' => $skippedRecords
         ]);
     }
 
