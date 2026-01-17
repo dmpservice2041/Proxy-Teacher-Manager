@@ -43,25 +43,27 @@ class Attendance {
         return $stmt->execute([$date]);
     }
 
-    // Get all attendance records for a date with teacher empcode
+    // Get all attendance records for a date with teacher empcode and name
     public function getAllForDate($date) {
         $stmt = $this->pdo->prepare("
-            SELECT ta.*, t.empcode 
+            SELECT ta.*, t.empcode, t.name 
             FROM teacher_attendance ta
             JOIN teachers t ON ta.teacher_id = t.id
             WHERE ta.date = ?
+            ORDER BY CAST(t.empcode AS UNSIGNED), t.empcode
         ");
         $stmt->execute([$date]);
         return $stmt->fetchAll();
     }
 
-    // Get absent teachers for a date (Only ACTIVE teachers need proxies)
+    // Get absent teachers for a date (Including both ACTIVE and INACTIVE)
     public function getAbsentTeachers($date) {
         $stmt = $this->pdo->prepare("
-            SELECT t.* 
+            SELECT t.*, ta.status
             FROM teachers t
             JOIN teacher_attendance ta ON t.id = ta.teacher_id
-            WHERE ta.date = ? AND ta.status = 'Absent' AND t.is_active = 1
+            WHERE ta.date = ? AND ta.status = 'Absent'
+            ORDER BY t.is_active DESC, CAST(t.empcode AS UNSIGNED), t.empcode
         ");
         $stmt->execute([$date]);
         return $stmt->fetchAll();
@@ -86,5 +88,17 @@ class Attendance {
         ");
         $stmt->execute([$teacherId, $date]);
         return $stmt->fetch();
+    }
+    // Get attendance records for a date range (for reports)
+    public function getAttendanceRange($startDate, $endDate) {
+        $stmt = $this->pdo->prepare("
+            SELECT ta.*, t.empcode, t.name as teacher_name
+            FROM teacher_attendance ta
+            JOIN teachers t ON ta.teacher_id = t.id
+            WHERE ta.date BETWEEN ? AND ?
+            ORDER BY t.empcode, ta.date
+        ");
+        $stmt->execute([$startDate, $endDate]);
+        return $stmt->fetchAll();
     }
 }

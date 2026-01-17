@@ -9,23 +9,30 @@ class ProxyAssignment {
     }
 
     // Create a new proxy assignment
-    public function assign($date, $absentTeacherId, $proxyTeacherId, $classId, $periodNo, $mode = 'AUTO', $ruleApplied = '') {
+    public function assign($date, $absentTeacherId, $proxyTeacherId, $classId, $periodNo, $mode = 'AUTO', $ruleApplied = '', $subjectId = null) {
         try {
             $this->pdo->beginTransaction();
 
             // Delete any existing assignment for this specific slot to prevent duplicates/conflicts
-            $deleteStmt = $this->pdo->prepare("
-                DELETE FROM proxy_assignments 
-                WHERE date = ? AND absent_teacher_id = ? AND class_id = ? AND period_no = ?
-            ");
-            $deleteStmt->execute([$date, $absentTeacherId, $classId, $periodNo]);
+            // If subjectId is provided, be specific. If not, it might delete all subjects for that period (legacy behavior).
+            // Better to match on subject_id if available.
+            $sql = "DELETE FROM proxy_assignments WHERE date = ? AND absent_teacher_id = ? AND class_id = ? AND period_no = ?";
+            $params = [$date, $absentTeacherId, $classId, $periodNo];
+            
+            if ($subjectId) {
+                $sql .= " AND subject_id = ?";
+                $params[] = $subjectId;
+            }
+
+            $deleteStmt = $this->pdo->prepare($sql);
+            $deleteStmt->execute($params);
 
             // Insert assignment
             $stmt = $this->pdo->prepare("
-                INSERT INTO proxy_assignments (date, absent_teacher_id, proxy_teacher_id, class_id, period_no, mode, rule_applied)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO proxy_assignments (date, absent_teacher_id, proxy_teacher_id, class_id, period_no, mode, rule_applied, subject_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ");
-            $stmt->execute([$date, $absentTeacherId, $proxyTeacherId, $classId, $periodNo, $mode, $ruleApplied]);
+            $stmt->execute([$date, $absentTeacherId, $proxyTeacherId, $classId, $periodNo, $mode, $ruleApplied, $subjectId]);
             $assignmentId = $this->pdo->lastInsertId();
 
             // Log action
@@ -96,7 +103,7 @@ class ProxyAssignment {
     // Get all assignments for a date indexed by slot key
     public function getAssignmentsForDate($date) {
         $stmt = $this->pdo->prepare("
-            SELECT absent_teacher_id, proxy_teacher_id, class_id, period_no 
+            SELECT absent_teacher_id, proxy_teacher_id, class_id, period_no, subject_id 
             FROM proxy_assignments 
             WHERE date = ?
         ");
@@ -105,9 +112,56 @@ class ProxyAssignment {
         
         $indexed = [];
         foreach ($assignments as $a) {
+            // Key format: absent_teacher_id|period_no|class_id|subject_id
             $key = $a['absent_teacher_id'] . '|' . $a['period_no'] . '|' . $a['class_id'];
+            if ($a['subject_id']) {
+                $key .= '|' . $a['subject_id'];
+            }
             $indexed[$key] = $a['proxy_teacher_id'];
         }
         return $indexed;
+    }
+    // Get detailed report data with filters
+    public function getReportData($filters) {
+        $sql = "SELECT pa.*, 
+                       t1.name as absent_teacher_name, t1.empcode as absent_teacher_code,
+                       t2.name as proxy_teacher_name, t2.empcode as proxy_teacher_code,
+                       CONCAT(c.standard, '-', c.division, IF(sec.name IS NOT NULL, CONCAT(' (', sec.name, ')'), '')) as class_name,
+                       s.name as subject_name
+                FROM proxy_assignments pa
+                LEFT JOIN teachers t1 ON pa.absent_teacher_id = t1.id
+                LEFT JOIN teachers t2 ON pa.proxy_teacher_id = t2.id
+                LEFT JOIN classes c ON pa.class_id = c.id
+                LEFT JOIN sections sec ON c.section_id = sec.id
+                LEFT JOIN subjects s ON pa.subject_id = s.id
+                WHERE 1=1";
+        
+        $params = [];
+        
+        if (!empty($filters['start_date']) && !empty($filters['end_date'])) {
+            $sql .= " AND pa.date BETWEEN ? AND ?";
+            $params[] = $filters['start_date'];
+            $params[] = $filters['end_date'];
+        } elseif (!empty($filters['date'])) {
+            $sql .= " AND pa.date = ?";
+            $params[] = $filters['date'];
+        }
+        
+        if (!empty($filters['teacher_id'])) {
+            // Teacher wise: show where they were the PROXY teacher (work done)
+            $sql .= " AND pa.proxy_teacher_id = ?";
+            $params[] = $filters['teacher_id'];
+        }
+        
+        if (!empty($filters['class_id'])) {
+            $sql .= " AND pa.class_id = ?";
+            $params[] = $filters['class_id'];
+        }
+        
+        $sql .= " ORDER BY pa.date ASC, pa.period_no ASC";
+        
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 }

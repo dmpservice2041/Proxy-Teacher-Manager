@@ -17,6 +17,7 @@ class Teacher {
              LEFT JOIN teacher_sections ts ON t.id = ts.teacher_id
              WHERE t.is_active = 1
              GROUP BY t.id
+             ORDER BY CAST(t.empcode AS UNSIGNED), t.empcode
         ");
         $stmt->execute();
         return $stmt->fetchAll();

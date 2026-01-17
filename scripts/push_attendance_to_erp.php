@@ -39,8 +39,16 @@ try {
     }
 
     // --- API Configuration ---
-    $url = 'https://entab.online/api/OpenAPI/PostStaffAttendanceAPI';
-    $headerKey = 'AyjyrW05tN1HUCOHI1aZMQ==';
+    require_once __DIR__ . '/../models/Settings.php';
+    $settingsModel = new Settings();
+    
+    $url = $settingsModel->get('erp_api_url'); // No fallback
+    $headerKey = $settingsModel->get('erp_header_key'); // No fallback
+
+    if (empty($url) || empty($headerKey)) {
+        echo json_encode(['success' => false, 'message' => 'ERP Configuration missing. Please configure ERP Integration in Settings.']);
+        exit;
+    }
 
     $ch = curl_init($url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);

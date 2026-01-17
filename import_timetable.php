@@ -1,215 +1,277 @@
 <?php
 /**
- * Web Interface for Timetable PDF Import
+ * Import Timetable from Excel/CSV
  */
 require_once 'config/app.php';
+require_once 'vendor/autoload.php';
+
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+
+// Handle Template Download - MUST BE BEFORE ANY OUTPUT
+if (isset($_GET['action']) && $_GET['action'] === 'download_template') {
+    if (ob_get_level()) ob_end_clean();
+    
+    $spreadsheet = new Spreadsheet();
+    $sheet = $spreadsheet->getActiveSheet();
+    
+    // Headers (Added Employee Code)
+    $headers = ['Day', 'Period', 'Employee Code (Optional)', 'Teacher Name', 'Class', 'Subject', 'Group Name'];
+    $sheet->fromArray([$headers], NULL, 'A1');
+    
+    // Sample Data
+    $sampleData = [
+        ['Monday', 1, 'T001', 'John Doe', '10-A', 'Maths', ''],
+        ['Tuesday', 2, '', 'Jane Smith', '9-B', 'Science', 'Group 1'], // Group example
+        ['Tuesday', 2, 'T003', 'Mike Ross', '9-B', 'English', 'Group 2'] 
+    ];
+    $sheet->fromArray($sampleData, NULL, 'A2');
+    
+    foreach (range('A', 'G') as $col) {
+        $sheet->getColumnDimension($col)->setAutoSize(true);
+    }
+
+    header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    header('Content-Disposition: attachment;filename="timetable_template.xlsx"');
+    header('Cache-Control: max-age=0');
+    
+    $writer = new Xlsx($spreadsheet);
+    $writer->save('php://output');
+    exit;
+}
+
 require_once 'includes/header.php';
 require_once 'models/Teacher.php';
 require_once 'models/Timetable.php';
 require_once 'models/Classes.php';
 require_once 'models/Subject.php';
-require_once 'vendor/autoload.php';
-
-use Smalot\PdfParser\Parser;
-
-$message = '';
-$error = '';
-$extractedText = '';
-$parsedEntries = [];
 
 $teacherModel = new Teacher();
 $timetableModel = new Timetable();
 $classModel = new Classes();
 $subjectModel = new Subject();
 
-// Get all data for matching
-$allTeachers = $teacherModel->getAllWithDetails();
-$allClasses = $classModel->getAll();
-$allSubjects = $subjectModel->getAll();
+$message = '';
+$error = '';
+$importStats = ['success' => 0, 'failed' => 0, 'errors' => []];
 
-// Handle file upload
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['pdf_file'])) {
-    if ($_FILES['pdf_file']['error'] === UPLOAD_ERR_OK) {
-        $uploadedFile = $_FILES['pdf_file']['tmp_name'];
-        $fileName = $_FILES['pdf_file']['name'];
-        
-        // Validate PDF
-        $fileType = mime_content_type($uploadedFile);
-        if ($fileType !== 'application/pdf') {
-            $error = "Invalid file type. Please upload a PDF file.";
-        } else {
-            try {
-                // Extract text from PDF
-                $parser = new Parser();
-                $pdf = $parser->parseFile($uploadedFile);
-                $extractedText = $pdf->getText();
-                
-                if (empty($extractedText)) {
-                    // Try extracting from pages individually
-                    $pages = $pdf->getPages();
-                    foreach ($pages as $page) {
-                        $extractedText .= $page->getText() . "\n";
-                    }
+// Handle Import
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['file'])) {
+    if ($_FILES['file']['error'] === UPLOAD_ERR_OK) {
+        try {
+            $inputFileName = $_FILES['file']['tmp_name'];
+            $spreadsheet = IOFactory::load($inputFileName);
+            $sheet = $spreadsheet->getActiveSheet();
+            $rows = $sheet->toArray();
+            
+            // Remove header
+            array_shift($rows);
+            
+            // Prepare Lookup Maps
+            $teachersByName = [];
+            $teachersByCode = [];
+            foreach ($teacherModel->getAllActive() as $t) {
+                $teachersByName[strtolower(trim($t['name']))] = $t['id'];
+                if (!empty($t['empcode'])) {
+                    $teachersByCode[strtolower(trim($t['empcode']))] = $t['id'];
                 }
-                
-                if (empty($extractedText)) {
-                    $error = "Could not extract text from PDF. The PDF might be image-based or encrypted.";
-                } else {
-                    $message = "Successfully extracted " . strlen($extractedText) . " characters from PDF.";
-                }
-            } catch (Exception $e) {
-                $error = "Error processing PDF: " . $e->getMessage();
             }
+            
+            $classes = [];
+            foreach ($classModel->getAll() as $c) {
+                $key = strtolower(trim($c['standard'] . '-' . $c['division']));
+                $classes[$key] = $c['id'];
+            }
+            
+            $subjects = [];
+            foreach ($subjectModel->getAll() as $s) {
+                $subjects[strtolower(trim($s['name']))] = $s['id'];
+            }
+            
+            $dayMap = [
+                'monday' => 1, 'mon' => 1, '1' => 1,
+                'tuesday' => 2, 'tue' => 2, '2' => 2,
+                'wednesday' => 3, 'wed' => 3, '3' => 3,
+                'thursday' => 4, 'thu' => 4, '4' => 4,
+                'friday' => 5, 'fri' => 5, '5' => 5,
+                'saturday' => 6, 'sat' => 6, '6' => 6
+            ];
+
+            foreach ($rows as $index => $row) {
+                $rowNum = $index + 2; 
+                
+                // Order: Day, Period, EmpCode, Name, Class, Subject, Group
+                $dayRaw = strtolower(trim($row[0] ?? ''));
+                $period = (int)($row[1] ?? 0);
+                $empCode = strtolower(trim($row[2] ?? ''));
+                $teacherName = strtolower(trim($row[3] ?? ''));
+                $className = strtolower(trim($row[4] ?? ''));
+                $subjectName = strtolower(trim($row[5] ?? ''));
+                $groupName = trim($row[6] ?? ''); // Adjusted index
+                
+                if (empty($dayRaw) && empty($teacherName) && empty($empCode)) continue; 
+
+                if (!isset($dayMap[$dayRaw])) {
+                    $importStats['failed']++;
+                    $importStats['errors'][] = "Row $rowNum: Invalid Day '$dayRaw'";
+                    continue;
+                }
+                $dayId = $dayMap[$dayRaw];
+                
+                if ($period < 1 || $period > 8) { 
+                     $importStats['failed']++;
+                     $importStats['errors'][] = "Row $rowNum: Invalid Period '$period'";
+                     continue;
+                }
+                
+                // Resolution Logic: EmpCode > Name
+                $teacherId = null;
+                if (!empty($empCode) && isset($teachersByCode[$empCode])) {
+                    $teacherId = $teachersByCode[$empCode];
+                } elseif (!empty($teacherName) && isset($teachersByName[$teacherName])) {
+                    $teacherId = $teachersByName[$teacherName];
+                }
+
+                if (!$teacherId) {
+                    $importStats['failed']++;
+                    $importStats['errors'][] = "Row $rowNum: Teacher not found (Code: '$empCode', Name: '$teacherName')";
+                    continue;
+                }
+                
+                if (!isset($classes[$className])) {
+                    $importStats['failed']++;
+                    $importStats['errors'][] = "Row $rowNum: Class '$className' not found";
+                    continue;
+                }
+                $classId = $classes[$className];
+                
+                if (!isset($subjects[$subjectName])) {
+                     $importStats['failed']++;
+                     $importStats['errors'][] = "Row $rowNum: Subject '$subjectName' not found";
+                     continue;
+                }
+                $subjectId = $subjects[$subjectName];
+                
+                try {
+                    $timetableModel->add($teacherId, $classId, $subjectId, $dayId, $period, empty($groupName) ? null : $groupName);
+                    $importStats['success']++;
+                } catch (Exception $e) {
+                     $importStats['failed']++;
+                     $importStats['errors'][] = "Row $rowNum: DB Error - " . $e->getMessage();
+                }
+            }
+            
+            $message = "Import processing complete!";
+            
+        } catch (Exception $e) {
+            $error = "File processing error: " . $e->getMessage();
         }
     } else {
-        $error = "File upload error: " . $_FILES['pdf_file']['error'];
+        $error = "Upload failed: " . $_FILES['file']['error'];
     }
 }
 
-// Handle import action
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['import_entries'])) {
-    $entriesJson = $_POST['entries_json'] ?? '[]';
-    $entries = json_decode($entriesJson, true);
-    
-    if (is_array($entries)) {
-        $imported = 0;
-        $skipped = 0;
-        $errors = [];
-        
-        foreach ($entries as $entry) {
-            try {
-                // Check if entry already exists
-                $existing = $timetableModel->getTeacherSchedule($entry['teacher_id'], $entry['day']);
-                $exists = false;
-                foreach ($existing as $existingEntry) {
-                    if ($existingEntry['period_no'] == $entry['period'] && 
-                        $existingEntry['class_id'] == $entry['class_id']) {
-                        $exists = true;
-                        break;
-                    }
-                }
-                
-                if (!$exists) {
-                    $timetableModel->add(
-                        $entry['teacher_id'],
-                        $entry['class_id'],
-                        $entry['subject_id'],
-                        $entry['day'],
-                        $entry['period'],
-                        $entry['group_name'] ?? null
-                    );
-                    $imported++;
-                } else {
-                    $skipped++;
-                }
-            } catch (Exception $e) {
-                $errors[] = "Error: " . $e->getMessage();
-            }
-        }
-        
-        $message = "Import complete: {$imported} imported, {$skipped} skipped, " . count($errors) . " errors.";
-        if (!empty($errors)) {
-            $error = implode("<br>", array_slice($errors, 0, 10));
-        }
-    }
-}
 ?>
 
-<div class="container mt-4">
-    <h2>Import Timetable from PDF</h2>
-    
-    <?php if ($message): ?><div class="alert alert-success"><?php echo $message; ?></div><?php endif; ?>
-    <?php if ($error): ?><div class="alert alert-danger"><?php echo $error; ?></div><?php endif; ?>
-    
-    <div class="row">
-        <div class="col-md-12">
-            <div class="card">
-                <div class="card-header">
-                    <h5>Step 1: Upload PDF File</h5>
-                </div>
-                <div class="card-body">
-                    <form method="POST" enctype="multipart/form-data">
-                        <div class="mb-3">
-                            <label for="pdf_file" class="form-label">Select PDF File</label>
-                            <input type="file" class="form-control" id="pdf_file" name="pdf_file" accept=".pdf" required>
-                            <small class="form-text text-muted">Upload the timetable PDF file</small>
-                        </div>
-                        <button type="submit" class="btn btn-primary">Extract Text from PDF</button>
-                    </form>
-                </div>
-            </div>
+<div class="main-content container-fluid">
+    <div class="page-header d-flex justify-content-between align-items-center mb-5">
+        <div>
+            <h1 class="fw-bold mb-1">Import Timetable</h1>
+            <p class="mb-0 opacity-75">Upload Excel sheet to bulk import schedule data.</p>
         </div>
+        <a href="timetable.php" class="btn btn-outline-light">
+            <i class="fas fa-arrow-left me-2"></i> Back to Timetable
+        </a>
     </div>
-    
-    <?php if (!empty($extractedText)): ?>
-    <div class="row mt-4">
-        <div class="col-md-12">
-            <div class="card">
-                <div class="card-header">
-                    <h5>Step 2: Review Extracted Text</h5>
-                </div>
-                <div class="card-body">
-                    <p><strong>Extracted Text:</strong> (<?php echo strlen($extractedText); ?> characters)</p>
-                    <textarea class="form-control" rows="20" readonly><?php echo htmlspecialchars($extractedText); ?></textarea>
-                    <p class="mt-2"><small class="text-muted">Please review the extracted text to understand the format. The parser will attempt to identify teachers, classes, subjects, days, and periods.</small></p>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <div class="row mt-4">
-        <div class="col-md-12">
-            <div class="card">
-                <div class="card-header">
-                    <h5>Step 3: Parse and Import</h5>
-                </div>
-                <div class="card-body">
-                    <p class="text-muted">Due to the complexity of PDF table parsing, please manually review the extracted text above and use the timetable page to add entries, or provide the timetable data in Excel/CSV format for easier import.</p>
-                    <p><strong>Alternative:</strong> You can also manually enter timetable data using the <a href="timetable.php">Timetable page</a>.</p>
-                </div>
-            </div>
-        </div>
-    </div>
-    <?php endif; ?>
-    
-    <div class="row mt-4">
-        <div class="col-md-12">
-            <div class="card">
-                <div class="card-header">
-                    <h5>Reference Data</h5>
-                </div>
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-4">
-                            <h6>Teachers (<?php echo count($allTeachers); ?>)</h6>
-                            <select class="form-select" size="5" readonly>
-                                <?php foreach (array_slice($allTeachers, 0, 20) as $t): ?>
-                                    <option><?php echo htmlspecialchars($t['name']); ?></option>
-                                <?php endforeach; ?>
-                            </select>
+
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card border-0 shadow-sm rounded-4">
+                <div class="card-body p-4">
+                    
+                    <?php if ($message): ?>
+                        <div class="alert alert-success d-flex align-items-center">
+                            <i class="fas fa-check-circle me-2"></i>
+                            <div>
+                                <strong><?php echo $message; ?></strong><br>
+                                Imported: <?php echo $importStats['success']; ?><br>
+                                Failed: <?php echo $importStats['failed']; ?>
+                            </div>
                         </div>
-                        <div class="col-md-4">
-                            <h6>Classes (<?php echo count($allClasses); ?>)</h6>
-                            <select class="form-select" size="5" readonly>
-                                <?php foreach (array_slice($allClasses, 0, 20) as $c): ?>
-                                    <option><?php echo htmlspecialchars($c['standard'] . '-' . $c['division']); ?></option>
+                    <?php endif; ?>
+                    
+                    <?php if (!empty($importStats['errors'])): ?>
+                        <div class="alert alert-warning">
+                            <h6 class="alert-heading"><i class="fas fa-exclamation-triangle me-2"></i>Failed Rows:</h6>
+                            <ul class="mb-0 ps-3 small" style="max-height: 200px; overflow-y: auto;">
+                                <?php foreach ($importStats['errors'] as $err): ?>
+                                    <li><?php echo htmlspecialchars($err); ?></li>
                                 <?php endforeach; ?>
-                            </select>
+                            </ul>
                         </div>
-                        <div class="col-md-4">
-                            <h6>Subjects (<?php echo count($allSubjects); ?>)</h6>
-                            <select class="form-select" size="5" readonly>
-                                <?php foreach ($allSubjects as $s): ?>
-                                    <option><?php echo htmlspecialchars($s['name']); ?></option>
-                                <?php endforeach; ?>
-                            </select>
+                    <?php endif; ?>
+
+                    <?php if ($error): ?>
+                        <div class="alert alert-danger">
+                            <i class="fas fa-exclamation-circle me-2"></i> <?php echo $error; ?>
+                        </div>
+                    <?php endif; ?>
+
+                    <!-- Step 1: Download Template -->
+                    <div class="mb-5 pb-4 border-bottom">
+                        <h5 class="fw-bold text-primary mb-3">Step 1: Get the Template</h5>
+                        <p class="text-muted mb-3">Download the Excel template to see the required format. Fill it with your timetable data.</p>
+                        <a href="?action=download_template" class="btn btn-outline-primary">
+                            <i class="fas fa-file-excel me-2"></i> Download Template (.xlsx)
+                        </a>
+                        
+                        <div class="mt-3 p-3 bg-light rounded-3">
+                            <small class="d-block fw-bold text-secondary mb-2">Columns Required:</small>
+                            <div class="d-flex gap-2 flex-wrap text-muted small">
+                                <span class="badge bg-white text-dark border">Day</span>
+                                <span class="badge bg-white text-dark border">Period</span>
+                                <span class="badge bg-white text-dark border">Teacher Name</span>
+                                <span class="badge bg-white text-dark border">Class (e.g. 10-A)</span>
+                                <span class="badge bg-white text-dark border">Subject</span>
+                                <span class="badge bg-white text-dark border">Group (Optional)</span>
+                            </div>
                         </div>
                     </div>
+
+                    <!-- Step 2: Upload -->
+                    <div>
+                        <h5 class="fw-bold text-primary mb-3">Step 2: Upload File</h5>
+                        <form method="POST" enctype="multipart/form-data" class="dropzone-area">
+                            <div class="mb-4">
+                                <label for="file" class="form-label">Select Excel File (.xlsx, .xls, .csv)</label>
+                                <input type="file" class="form-control form-control-lg" id="file" name="file" accept=".xlsx, .xls, .csv" required>
+                            </div>
+                            
+                            <button type="submit" class="btn btn-primary btn-lg w-100">
+                                <i class="fas fa-cloud-upload-alt me-2"></i> Import Timetable
+                            </button>
+                        </form>
+                    </div>
+
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+<!-- Add Header Pattern Fix (Reusing your timetable styles) -->
+<style>
+    .page-header {
+        background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%);
+        padding: 2.5rem 2rem;
+        border-radius: 16px;
+        color: white;
+        margin-bottom: 2rem;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        position: relative;
+    }
+</style>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>

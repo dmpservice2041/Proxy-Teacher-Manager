@@ -153,4 +153,13 @@ class Timetable {
             return $stmt->execute([$classId, $subjectId, $id]);
         }
     }
+    public function getTeacherClasses($teacherId) {
+        $stmt = $this->pdo->prepare("
+            SELECT DISTINCT class_id 
+            FROM timetable 
+            WHERE teacher_id = ?
+        ");
+        $stmt->execute([$teacherId]);
+        return $stmt->fetchAll(PDO::FETCH_COLUMN);
+    }
 }

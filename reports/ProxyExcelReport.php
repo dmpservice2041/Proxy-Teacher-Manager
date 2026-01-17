@@ -169,8 +169,9 @@ class ProxyExcelReport {
                 tt.class_id = pa.class_id 
                 AND tt.period_no = pa.period_no 
                 AND tt.day_of_week = ?
+                AND (pa.subject_id IS NULL OR tt.subject_id = pa.subject_id)
             )
-            LEFT JOIN subjects s ON tt.subject_id = s.id
+            LEFT JOIN subjects s ON s.id = COALESCE(pa.subject_id, tt.subject_id)
             WHERE pa.date = ?
             ORDER BY t_absent.name, pa.period_no
         ");

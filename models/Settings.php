@@ -15,6 +15,15 @@ class Settings {
         return $val !== false ? $val : $default;
     }
 
+    public function getAll() {
+        try {
+            $stmt = $this->pdo->query("SELECT setting_key, setting_value FROM system_settings");
+            return $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
+        } catch (Exception $e) {
+            return [];
+        }
+    }
+
     public function set($key, $value) {
         $stmt = $this->pdo->prepare("
             INSERT INTO system_settings (setting_key, setting_value) 

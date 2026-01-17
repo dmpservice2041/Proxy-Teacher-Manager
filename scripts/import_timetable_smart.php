@@ -234,6 +234,13 @@ for ($i = 0; $i < count($lines); $i++) {
                     $subjectText = trim($subjectText);
                     
                     if (!empty($subjectText)) {
+                        // Extract Group Name if present (e.g., "Maths (Group 1)" or "Maths - Group A")
+                        $groupName = null;
+                        if (preg_match('/(.+?)\s*[\(-]?\s*(Group\s*\w+)[\)]?/i', $subjectText, $groupMatch)) {
+                            $subjectText = trim($groupMatch[1]);
+                            $groupName = trim($groupMatch[2]);
+                        }
+
                         // Find matching class
                         $classKey = strtolower($standard . '-' . $section);
                         $class = $classMap[$classKey] ?? $classMap[strtolower($section)] ?? null;
@@ -282,6 +289,7 @@ for ($i = 0; $i < count($lines); $i++) {
                                 'subject_id' => $subject['id'],
                                 'class_name' => $class['standard'] . '-' . $class['division'],
                                 'subject_name' => $subject['name'],
+                                'group_name' => $groupName,
                                 'index' => $entryIndex++
                             ]);
                         } else {
@@ -339,7 +347,8 @@ function mapEntriesToGrid($entries, $totalPeriods = 8) {
             'day' => $day,
             'period' => $period,
             'class_name' => $entry['class_name'],
-            'subject_name' => $entry['subject_name']
+            'subject_name' => $entry['subject_name'],
+            'group_name' => $entry['group_name'] ?? null
         ];
     }
     
@@ -425,7 +434,7 @@ foreach ($allEntries as $entry) {
                 $entry['subject_id'],
                 $entry['day'],
                 $entry['period'],
-                null // group_name
+                $entry['group_name'] ?? null
             );
             $imported++;
         } else {

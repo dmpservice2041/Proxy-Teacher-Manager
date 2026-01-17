@@ -5,6 +5,7 @@
 require_once __DIR__ . '/database.php';
 try {
     $pdo = Database::getInstance()->getConnection();
+    // Use proper quoting for table names if needed, but standard SQL usually fine
     $stmt = $pdo->prepare("SELECT setting_value FROM system_settings WHERE setting_key = 'school_name'");
     $stmt->execute();
     $dbSchoolName = $stmt->fetchColumn();

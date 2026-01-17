@@ -6,34 +6,30 @@ header('Content-Type: application/json');
 $date = $_GET['date'] ?? date('Y-m-d');
 $dayOfWeek = date('N', strtotime($date));
 
+require_once __DIR__ . '/../models/ProxyAssignment.php';
+
+header('Content-Type: application/json');
+
 try {
-    $pdo = Database::getInstance()->getConnection();
-    $stmt = $pdo->prepare("
-        SELECT 
-            pa.date,
-            pa.period_no,
-            CONCAT(c.standard, '-', c.division) as class_name,
-            t_absent.name as absent_teacher,
-            t_proxy.name as proxy_teacher,
-            pa.mode,
-            s.name as subject_name
-        FROM proxy_assignments pa
-        JOIN teachers t_absent ON pa.absent_teacher_id = t_absent.id
-        JOIN teachers t_proxy ON pa.proxy_teacher_id = t_proxy.id
-        JOIN classes c ON pa.class_id = c.id
-        LEFT JOIN timetable tt ON (
-            tt.class_id = pa.class_id 
-            AND tt.period_no = pa.period_no 
-            AND tt.day_of_week = ?
-        )
-        LEFT JOIN subjects s ON tt.subject_id = s.id
-        WHERE pa.date = ?
-        ORDER BY t_absent.name, pa.period_no
-    ");
-    $stmt->execute([$dayOfWeek, $date]);
-    $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $filters = [];
+    
+    // Parse filters from GET request
+    $reportType = $_GET['report_type'] ?? 'daily';
+    
+    if ($reportType === 'daily') {
+         $filters['date'] = $_GET['date'] ?? date('Y-m-d');
+    } else {
+         if (!empty($_GET['start_date'])) $filters['start_date'] = $_GET['start_date'];
+         if (!empty($_GET['end_date'])) $filters['end_date'] = $_GET['end_date'];
+         if (!empty($_GET['teacher_id'])) $filters['teacher_id'] = $_GET['teacher_id'];
+         if (!empty($_GET['class_id'])) $filters['class_id'] = $_GET['class_id'];
+    }
+
+    $model = new ProxyAssignment();
+    $data = $model->getReportData($filters);
 
     echo json_encode(['success' => true, 'data' => $data]);
+
 } catch (Exception $e) {
     echo json_encode(['success' => false, 'error' => $e->getMessage()]);
 }

@@ -13,7 +13,7 @@ class Classes {
             SELECT c.*, s.name as section_name 
             FROM classes c
             JOIN sections s ON c.section_id = s.id
-            ORDER BY c.standard, c.division
+            ORDER BY CAST(c.standard AS UNSIGNED), c.standard, c.division
         ");
         return $stmt->fetchAll();
     }

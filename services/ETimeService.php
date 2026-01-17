@@ -1,8 +1,10 @@
 <?php
 require_once __DIR__ . '/../config/database.php';
-require_once __DIR__ . '/../config/etime_config.php';
+require_once __DIR__ . '/../config/database.php';
+// require_once __DIR__ . '/../config/etime_config.php'; // Deprecated
 require_once __DIR__ . '/../models/Attendance.php';
 require_once __DIR__ . '/../models/Teacher.php';
+require_once __DIR__ . '/../models/Settings.php';
 
 /**
  * ETimeService - Service to interact with eTime Office API
@@ -12,19 +14,57 @@ class ETimeService {
     private $db;
     private $config;
     private $authHeader;
+    private $settings;
 
     public function __construct() {
         $this->db = Database::getInstance()->getConnection();
-        $this->config = require __DIR__ . '/../config/etime_config.php';
+        $this->settings = new Settings();
         
-        // Generate Base64 encoded authorization header
-        $authString = sprintf(
-            '%s:%s:%s:true',
-            $this->config['corporate_id'],
-            $this->config['username'],
-            $this->config['password']
-        );
-        $this->authHeader = 'Basic ' . base64_encode($authString);
+        // Load config from DB (NO FALLBACKS)
+        $corpId = $this->settings->get('api_corporate_id');
+        $username = $this->settings->get('api_username');
+        $password = $this->settings->get('api_password');
+        $baseUrl = $this->settings->get('api_base_url');
+
+        // Check if settings are present
+        if (empty($corpId) || empty($username) || empty($password) || empty($baseUrl)) {
+            // We can't throw Exception in constructor if we want the app to load partially
+            // But this service won't work. We'll handle it during API calls.
+            $this->config = [
+                'corporate_id' => null,
+                'username' => null,
+                'password' => null,
+                'base_url' => null
+            ];
+        } else {
+            $this->config = [
+                'corporate_id' => $corpId,
+                'username' => $username,
+                'password' => $password,
+                'base_url' => $baseUrl
+            ];
+            
+            // Generate Base64 encoded authorization header
+            $authString = sprintf(
+                '%s:%s:%s:true',
+                $this->config['corporate_id'],
+                $this->config['username'],
+                $this->config['password']
+            );
+            $this->authHeader = 'Basic ' . base64_encode($authString);
+        }
+
+        $this->config['endpoints'] = [
+            'inout_punch_data' => '/DownloadInOutPunchData'
+        ];
+        
+        $this->config['status_mapping'] = [
+            'P' => 'Present',
+            'P/2' => 'Present',
+            'A' => 'Absent',
+            'WO' => 'Present',
+            'L' => 'Absent',
+        ];
     }
 
     /**
@@ -33,6 +73,13 @@ class ETimeService {
      * @return array Success status and message
      */
     public function fetchDailyAttendance($date) {
+        if (empty($this->config['base_url']) || empty($this->authHeader)) {
+            return [
+                'success' => false,
+                'message' => 'API Configuration missing. Please configure Attendance Fetch API in Settings.'
+            ];
+        }
+
         try {
             // Convert date to eTime Office format (dd/MM/yyyy)
             $etimeDate = date('d/m/Y', strtotime($date));
@@ -551,6 +598,14 @@ class ETimeService {
      * @return array Success status, message, and unique teachers data
      */
     public function fetchAllTeachers($daysBack = 90) {
+        if (empty($this->config['base_url']) || empty($this->authHeader)) {
+            return [
+                'success' => false,
+                'message' => 'API Configuration missing. Please configure Attendance Fetch API in Settings.',
+                'teachers' => []
+            ];
+        }
+
         try {
             // Use a date range to get comprehensive list
             $endDate = date('d/m/Y');
