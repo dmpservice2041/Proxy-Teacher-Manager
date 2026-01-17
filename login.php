@@ -31,7 +31,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
     $password = $_POST['password'] ?? '';
 
     $userModel = new User();
-    if ($userModel->login($username, $password)) {
+    $result = $userModel->login($username, $password);
+    
+    // Handle rate limiting response
+    if (is_array($result)) {
+        $error = $result['message'];
+    } elseif ($result === true) {
         header("Location: dashboard.php");
         exit;
     } else {
@@ -86,7 +91,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_reset'])) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - <?php echo defined('SCHOOL_NAME') ? SCHOOL_NAME : 'Proxy System'; ?></title>
+    <title>Proxy Manager</title>
+    
+    <!-- Favicon -->
+    <?php if ($schoolLogo): ?>
+    <link rel="icon" type="image/png" href="<?php echo htmlspecialchars($schoolLogo); ?>">
+    <?php endif; ?>
     
     <!-- Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">

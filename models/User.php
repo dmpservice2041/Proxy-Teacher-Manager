@@ -9,12 +9,27 @@ class User {
     }
 
     public function login($credential, $password) {
+        // Rate limiting: Track failed login attempts
+        $this->initRateLimiting();
+        
+        // Check if account is locked
+        if ($this->isRateLimited()) {
+            $minutesLeft = ceil(($_SESSION['login_lockout_until'] - time()) / 60);
+            return ['success' => false, 'message' => "Too many failed attempts. Try again in {$minutesLeft} minutes."];
+        }
+        
         // Allow login by Username OR Email
         $stmt = $this->pdo->prepare("SELECT * FROM users WHERE username = ? OR email = ?");
         $stmt->execute([$credential, $credential]);
         $user = $stmt->fetch();
 
         if ($user && password_verify($password, $user['password_hash'])) {
+             // Clear failed attempts on successful login
+             $this->clearFailedAttempts();
+             
+             // Prevent session fixation attacks
+             session_regenerate_id(true);
+             
              // Set Session
              $_SESSION['user_id'] = $user['id'];
              $_SESSION['username'] = $user['username'];
@@ -22,7 +37,46 @@ class User {
              $_SESSION['role'] = $user['role'];
              return true;
         }
+        
+        // Track failed attempt
+        $this->recordFailedAttempt();
         return false;
+    }
+    
+    private function initRateLimiting() {
+        if (!isset($_SESSION['login_attempts'])) {
+            $_SESSION['login_attempts'] = 0;
+            $_SESSION['login_first_attempt'] = time();
+        }
+    }
+    
+    private function isRateLimited() {
+        // Check if locked out
+        if (isset($_SESSION['login_lockout_until']) && $_SESSION['login_lockout_until'] > time()) {
+            return true;
+        }
+        
+        // Reset if lockout expired
+        if (isset($_SESSION['login_lockout_until']) && $_SESSION['login_lockout_until'] <= time()) {
+            $this->clearFailedAttempts();
+        }
+        
+        return false;
+    }
+    
+    private function recordFailedAttempt() {
+        $_SESSION['login_attempts']++;
+        
+        // Lock account after 5 failed attempts
+        if ($_SESSION['login_attempts'] >= 5) {
+            $_SESSION['login_lockout_until'] = time() + (15 * 60); // 15 minutes
+        }
+    }
+    
+    private function clearFailedAttempts() {
+        unset($_SESSION['login_attempts']);
+        unset($_SESSION['login_first_attempt']);
+        unset($_SESSION['login_lockout_until']);
     }
 
     // Create a new user (Utility for initial setup)

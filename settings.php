@@ -52,23 +52,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Handle Logo Upload
             if (isset($_FILES['school_logo']) && $_FILES['school_logo']['error'] === UPLOAD_ERR_OK) {
                 $uploadDir = 'assets/uploads/';
-                // Ensure dir exists (redundant check but safe)
-                if (!is_dir($uploadDir)) mkdir($uploadDir, 0777, true);
+                // Ensure dir exists with secure permissions
+                if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
                 
+                // File size limit: 5MB
+                if ($_FILES['school_logo']['size'] > 5 * 1024 * 1024) {
+                    throw new Exception("File size must be less than 5MB.");
+                }
+                
+                // MIME type validation (prevents file extension bypass)
+                $finfo = finfo_open(FILEINFO_MIME_TYPE);
+                $mimeType = finfo_file($finfo, $_FILES['school_logo']['tmp_name']);
+                finfo_close($finfo);
+                
+                $allowedMimes = ['image/jpeg', 'image/png', 'image/gif'];
+                if (!in_array($mimeType, $allowedMimes)) {
+                    throw new Exception("Invalid file type. Only JPG, PNG, GIF images allowed.");
+                }
+                
+                // Extension validation (additional layer)
                 $fileExt = strtolower(pathinfo($_FILES['school_logo']['name'], PATHINFO_EXTENSION));
-                $allowed = ['jpg', 'jpeg', 'png', 'gif'];
+                $allowedExts = ['jpg', 'jpeg', 'png', 'gif'];
                 
-                if (in_array($fileExt, $allowed)) {
+                if (in_array($fileExt, $allowedExts) && in_array($mimeType, $allowedMimes)) {
                     $fileName = 'school_logo_' . time() . '.' . $fileExt;
                     $destPath = $uploadDir . $fileName;
                     
                     if (move_uploaded_file($_FILES['school_logo']['tmp_name'], $destPath)) {
+                        // Set file permissions explicitly
+                        chmod($destPath, 0644);
                         $settingsModel->set('school_logo', $destPath);
                     } else {
-                        throw new Exception("Failed to save logo file.");
+                        throw new Exception("File upload failed.");
                     }
                 } else {
-                    throw new Exception("Invalid file type. Only JPG, PNG, GIF allowed.");
+                    throw new Exception("Invalid file format.");
                 }
             }
             
