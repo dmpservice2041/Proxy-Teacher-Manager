@@ -14,7 +14,6 @@ class Section {
         return $stmt->fetch();
     }
     
-    // Get all sections ordered by priority (1 is highest)
     public function getAllOrderedByPriority() {
         $stmt = $this->pdo->query("SELECT * FROM sections ORDER BY priority ASC");
         return $stmt->fetchAll();

@@ -4,12 +4,10 @@ require_once 'models/ProxyAssignment.php';
 
 header('Content-Type: application/json');
 
-// Ensure exports directory exists
 if (!is_dir('exports')) {
     mkdir('exports', 0777, true);
 }
 
-// Validate inputs
 $reportType = $_POST['report_type'] ?? 'daily';
 $filters = [];
 $titleSuffix = "";

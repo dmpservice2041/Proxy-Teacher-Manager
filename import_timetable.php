@@ -9,7 +9,6 @@ use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
-// Handle Template Download - MUST BE BEFORE ANY OUTPUT
 if (isset($_GET['action']) && $_GET['action'] === 'download_template') {
     if (ob_get_level()) ob_end_clean();
     
@@ -56,7 +55,6 @@ $message = '';
 $error = '';
 $importStats = ['success' => 0, 'failed' => 0, 'errors' => []];
 
-// Handle Import
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['file'])) {
     if ($_FILES['file']['error'] === UPLOAD_ERR_OK) {
         try {

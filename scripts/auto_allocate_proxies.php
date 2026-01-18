@@ -26,6 +26,29 @@ if (!$date) {
 
 try {
     $service = new ProxyAllocationService();
+    
+    // VALIDATION: Check if any attendance exists for this date
+    $attendanceModel = new Attendance();
+    $presentCount = $attendanceModel->isPresent(1, $date) ? 1 : 0; // Poor check, need count method or use service
+    // Better: Check raw count query or use existing model method
+    // Attendance::getAllForDate returns array.
+    $presentTeachers = $attendanceModel->getAllForDate($date);
+    $hasPresent = false;
+    foreach ($presentTeachers as $pt) {
+        if ($pt['status'] === 'Present') {
+            $hasPresent = true;
+            break;
+        }
+    }
+    
+    if (!$hasPresent) {
+         echo json_encode([
+            'success' => false, 
+            'message' => 'No teachers are marked Present for this date. Please mark attendance first.'
+        ]);
+        exit;
+    }
+
     $result = $service->autoAllocateAll($date);
     
     echo json_encode($result);

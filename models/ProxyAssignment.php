@@ -8,14 +8,10 @@ class ProxyAssignment {
         $this->pdo = Database::getInstance()->getConnection();
     }
 
-    // Create a new proxy assignment
     public function assign($date, $absentTeacherId, $proxyTeacherId, $classId, $periodNo, $mode = 'AUTO', $ruleApplied = '', $subjectId = null) {
         try {
             $this->pdo->beginTransaction();
 
-            // Delete any existing assignment for this specific slot to prevent duplicates/conflicts
-            // If subjectId is provided, be specific. If not, it might delete all subjects for that period (legacy behavior).
-            // Better to match on subject_id if available.
             $sql = "DELETE FROM proxy_assignments WHERE date = ? AND absent_teacher_id = ? AND class_id = ? AND period_no = ?";
             $params = [$date, $absentTeacherId, $classId, $periodNo];
             
@@ -27,7 +23,6 @@ class ProxyAssignment {
             $deleteStmt = $this->pdo->prepare($sql);
             $deleteStmt->execute($params);
 
-            // Insert assignment
             $stmt = $this->pdo->prepare("
                 INSERT INTO proxy_assignments (date, absent_teacher_id, proxy_teacher_id, class_id, period_no, mode, rule_applied, subject_id)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -35,7 +30,6 @@ class ProxyAssignment {
             $stmt->execute([$date, $absentTeacherId, $proxyTeacherId, $classId, $periodNo, $mode, $ruleApplied, $subjectId]);
             $assignmentId = $this->pdo->lastInsertId();
 
-            // Log action
             $source = ($mode === 'MANUAL') ? 'ADMIN' : 'SYSTEM';
             $logStmt = $this->pdo->prepare("
                 INSERT INTO proxy_audit_logs (proxy_assignment_id, action, performed_by, notes)
@@ -51,7 +45,6 @@ class ProxyAssignment {
         }
     }
 
-    // Check if a teacher is already assigned as a proxy in a specific slot
     public function isAssignedProxy($teacherId, $date, $periodNo) {
         $stmt = $this->pdo->prepare("
             SELECT COUNT(*) FROM proxy_assignments 
@@ -61,7 +54,6 @@ class ProxyAssignment {
         return $stmt->fetchColumn() > 0;
     }
 
-    // Get number of proxies assigned to a teacher on a specific date
     public function getProxyCountForDay($teacherId, $date) {
         $stmt = $this->pdo->prepare("
             SELECT COUNT(*) FROM proxy_assignments 
@@ -71,7 +63,6 @@ class ProxyAssignment {
         return (int)$stmt->fetchColumn();
     }
 
-    // Get number of proxies assigned to a teacher in a week (approximate by date range)
     public function getProxyCountForWeek($teacherId, $startDate, $endDate) {
         $stmt = $this->pdo->prepare("
             SELECT COUNT(*) FROM proxy_assignments 
@@ -81,7 +72,6 @@ class ProxyAssignment {
         return (int)$stmt->fetchColumn();
     }
 
-    // Delete all assignments for a date
     public function deleteAllForDate($date) {
         try {
             $this->pdo->beginTransaction();
@@ -89,7 +79,6 @@ class ProxyAssignment {
             $stmt = $this->pdo->prepare("DELETE FROM proxy_assignments WHERE date = ?");
             $stmt->execute([$date]);
             
-            // Also cleanup audit logs that have no corresponding assignment
             $this->pdo->exec("DELETE FROM proxy_audit_logs WHERE proxy_assignment_id NOT IN (SELECT id FROM proxy_assignments)");
             
             $this->pdo->commit();
@@ -100,7 +89,6 @@ class ProxyAssignment {
         }
     }
 
-    // Get all assignments for a date indexed by slot key
     public function getAssignmentsForDate($date) {
         $stmt = $this->pdo->prepare("
             SELECT absent_teacher_id, proxy_teacher_id, class_id, period_no, subject_id 
@@ -121,7 +109,6 @@ class ProxyAssignment {
         }
         return $indexed;
     }
-    // Get detailed report data with filters
     public function getReportData($filters) {
         $sql = "SELECT pa.*, 
                        t1.name as absent_teacher_name, t1.empcode as absent_teacher_code,

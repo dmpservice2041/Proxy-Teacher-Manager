@@ -22,7 +22,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $user) {
     } elseif ($pass1 !== $pass2) {
         $error = "Passwords do not match.";
     } else {
-        // Update password
         $hash = password_hash($pass1, PASSWORD_DEFAULT);
         if ($userModel->updatePassword($user['id'], $hash)) {
             $userModel->clearResetToken($user['id']);

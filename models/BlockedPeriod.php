@@ -14,7 +14,6 @@ class BlockedPeriod {
     }
 
     public function unblock($day, $periodNo, $classId = null) {
-        // Handle NULL class_id correctly in SQL
         if ($classId === null) {
             $stmt = $this->pdo->prepare("DELETE FROM blocked_periods WHERE day = ? AND period_no = ? AND class_id IS NULL");
             return $stmt->execute([$day, $periodNo]);
@@ -24,7 +23,6 @@ class BlockedPeriod {
         }
     }
 
-    // Check if a specific context is blocked
     // If $classId is provided, checks if Global is blocked OR Class is blocked.
     public function isBlocked($day, $periodNo, $classId = null) {
         if ($classId) {
@@ -43,7 +41,6 @@ class BlockedPeriod {
             $stmt->execute([$classId]);
         } else {
             // If fetching for "Global" view, only fetch global blocks? 
-            // Or typically we want everything?
             // Let's assume this is for the internal optimization map.
             $stmt = $this->pdo->query("SELECT * FROM blocked_periods");
         }
@@ -56,7 +53,6 @@ class BlockedPeriod {
         
         $lookup = [];
         foreach ($results as $row) {
-             // For strict checking, if we passed class_id, we want a simple map
              if ($classId) {
                  $lookup[$row['day']][$row['period_no']] = true;
              } else {

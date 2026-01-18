@@ -5,23 +5,18 @@ require_once 'services/ProxyEngine.php';
 require_once 'reports/ProxyExcelReport.php';
 require_once 'services/ProxyAllocationService.php';
 
-// Quick Stats Handling
 $pdo = Database::getInstance()->getConnection();
 $today = date('Y-m-d');
 
-// KPI 1: Total Absent Teachers
 $stmt = $pdo->prepare("SELECT COUNT(*) FROM teacher_attendance WHERE date = ? AND status = 'Absent'");
 $stmt->execute([$today]);
 $absentCount = $stmt->fetchColumn();
 
-// KPI 2: Total Proxies Assigned
 $stmt = $pdo->prepare("SELECT COUNT(*) FROM proxy_assignments WHERE date = ?");
 $stmt->execute([$today]);
 $proxyCount = $stmt->fetchColumn();
 
-// KPI 3: Coverage % (Implicit)
 
-// Fetch All Absent Slots for the new logic
 $allocationService = new ProxyAllocationService();
 $allSlots = $allocationService->getAbsentSlots($today);
 
@@ -30,7 +25,6 @@ $pendingSlots = array_filter($allSlots, function($s) {
 });
 $notAllocatedCount = count($pendingSlots);
 
-// Handle Generate Action
 $message = '';
 if (isset($_POST['generate_proxies'])) {
     $engine = new ProxyEngine();
@@ -38,7 +32,6 @@ if (isset($_POST['generate_proxies'])) {
     $message = count($logs) . " actions performed.";
 }
 
-// Fetch Today's Assignments
 $stmt = $pdo->prepare("
     SELECT pa.*, t_absent.name as absent, t_proxy.name as proxy, c.standard, c.division
     FROM proxy_assignments pa
@@ -51,7 +44,6 @@ $stmt = $pdo->prepare("
 $stmt->execute([$today]);
 $assignments = $stmt->fetchAll();
 
-// Load Settings Model to fetch School Profile
 require_once 'models/Settings.php';
 $settingsModel = new Settings();
 $schoolName = $settingsModel->get('school_name', defined('SCHOOL_NAME') ? SCHOOL_NAME : 'Proxy System');

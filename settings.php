@@ -49,10 +49,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $settingsModel->set('school_country', $_POST['school_country']);
             $settingsModel->set('school_pincode', $_POST['school_pincode']);
             
-            // Handle Logo Upload
             if (isset($_FILES['school_logo']) && $_FILES['school_logo']['error'] === UPLOAD_ERR_OK) {
                 $uploadDir = 'assets/uploads/';
-                // Ensure dir exists with secure permissions
                 if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
                 
                 // File size limit: 5MB
@@ -79,7 +77,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $destPath = $uploadDir . $fileName;
                     
                     if (move_uploaded_file($_FILES['school_logo']['tmp_name'], $destPath)) {
-                        // Set file permissions explicitly
                         chmod($destPath, 0644);
                         $settingsModel->set('school_logo', $destPath);
                     } else {
@@ -137,6 +134,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
         
+        // TRANSFER TIMETABLE
+        elseif (isset($_POST['transfer_timetable'])) {
+            $sourceTeacherId = $_POST['source_teacher_id'];
+            $targetTeacherId = $_POST['target_teacher_id'];
+            
+            if (empty($sourceTeacherId) || empty($targetTeacherId)) {
+                throw new Exception("Please select both source and target teachers.");
+            }
+            
+            if ($sourceTeacherId == $targetTeacherId) {
+                throw new Exception("Source and target teachers must be different.");
+            }
+            
+            // Transfer timetable entries
+            $stmt = $pdo->prepare("UPDATE timetable SET teacher_id = ? WHERE teacher_id = ?");
+            $stmt->execute([$targetTeacherId, $sourceTeacherId]);
+            $transferredCount = $stmt->rowCount();
+            
+            $message = "Successfully transferred {$transferredCount} timetable entries from source to target teacher.";
+        }
+        
     } catch (Exception $e) {
         $error = "Error: " . $e->getMessage();
     }
@@ -171,7 +189,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Fetch Data
 $activeTab = $_GET['tab'] ?? 'profile';
 $user = $userModel->getById($_SESSION['user_id']);
 
@@ -351,6 +368,9 @@ $schoolPincode = $settingsModel->get('school_pincode', '');
                 <a href="?tab=email" class="settings-nav-link <?php echo $activeTab === 'email' ? 'active' : ''; ?>">
                     <i class="fas fa-envelope me-3" style="width: 20px;"></i> Email Settings
                 </a>
+                <a href="?tab=transfer" class="settings-nav-link <?php echo $activeTab === 'transfer' ? 'active' : ''; ?>">
+                    <i class="fas fa-exchange-alt me-3" style="width: 20px;"></i> Transfer Timetable
+                </a>
             </div>
         </div>
         
@@ -525,7 +545,6 @@ $schoolPincode = $settingsModel->get('school_pincode', '');
                 <div class="section-desc">Configure the connection to your eTime Office biometric system.</div>
                 
                 <?php
-                    // Fetch existing settings (No defaults in code)
                     $apiCorporateId = $settingsModel->get('api_corporate_id');
                     $apiUsername = $settingsModel->get('api_username');
                     $apiPassword = $settingsModel->get('api_password');
@@ -704,7 +723,6 @@ $schoolPincode = $settingsModel->get('school_pincode', '');
                 $days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
                 $totalPeriods = $settingsModel->get('total_periods', 8);
                 
-                // Fetch blocked periods for the specific target (Global or Class X)
                 $blockedPeriods = $blockedPeriodModel->getAllForClass($targetClassId);
                 
                 // Map for easy lookup
@@ -786,12 +804,144 @@ $schoolPincode = $settingsModel->get('school_pincode', '');
                         </button>
                     </div>
                 </form>
+            
+            <!-- TRANSFER TIMETABLE TAB -->
+            <?php elseif ($activeTab === 'transfer'): ?>
+                <div class="section-title">Transfer Timetable</div>
+                <div class="section-desc">Transfer all timetable entries from one teacher to another (useful when a teacher leaves).</div>
+                
+                <?php
+                    require_once 'models/Teacher.php';
+                    $teacherModel = new Teacher();
+                    $allTeachers = $teacherModel->getAllActive();
+                ?>
+
+                <form method="POST" id="transferForm">
+                    <input type="hidden" name="transfer_timetable" value="1">
+                    
+                    <div class="alert alert-warning border-0 bg-soft-warning d-flex mb-4">
+                        <i class="fas fa-exclamation-triangle mt-1 me-2 text-warning"></i>
+                        <div class="small text-dark">
+                            <strong>Warning:</strong> This action will transfer ALL timetable entries from the source teacher to the target teacher. This cannot be undone.
+                        </div>
+                    </div>
+
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <label class="form-label">Source Teacher (From)</label>
+                            <select name="source_teacher_id" class="form-select" required>
+                                <option value="">-- Select Teacher --</option>
+                                <?php foreach ($allTeachers as $teacher): ?>
+                                    <option value="<?php echo $teacher['id']; ?>">
+                                        <?php echo htmlspecialchars($teacher['name']) . ' (' . htmlspecialchars($teacher['empcode']) . ')'; ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <div class="form-text">The teacher whose timetable will be transferred.</div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <label class="form-label">Target Teacher (To)</label>
+                            <select name="target_teacher_id" class="form-select" required>
+                                <option value="">-- Select Teacher --</option>
+                                <?php foreach ($allTeachers as $teacher): ?>
+                                    <option value="<?php echo $teacher['id']; ?>">
+                                        <?php echo htmlspecialchars($teacher['name']) . ' (' . htmlspecialchars($teacher['empcode']) . ')'; ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <div class="form-text">The teacher who will receive the timetable.</div>
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex justify-content-end mt-4">
+                         <button type="button" class="btn btn-danger text-white px-4" id="btnTransfer">
+                             <i class="fas fa-exchange-alt me-2"></i> Transfer Timetable
+                         </button>
+                    </div>
+                </form>
             <?php endif; ?>
 
             
         </div>
     </div>
 </div>
+
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+<!-- Transfer Confirmation Modal -->
+<div class="modal fade" id="transferModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header border-0 bg-danger bg-opacity-10">
+                <h5 class="modal-title text-danger">
+                    <i class="fas fa-exclamation-triangle me-2"></i>Confirm Timetable Transfer
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body py-4">
+                <div class="text-center mb-3">
+                    <i class="fas fa-exchange-alt text-danger" style="font-size: 3rem;"></i>
+                </div>
+                <h5 class="fw-bold text-center mb-3">Are you absolutely sure?</h5>
+                <p class="text-muted text-center mb-4">
+                    This will transfer <strong>ALL timetable entries</strong> from the source teacher to the target teacher.
+                </p>
+                <div class="alert alert-danger bg-danger bg-opacity-10 border-0">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>This action cannot be undone!</strong>
+                </div>
+            </div>
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times me-2"></i>Cancel
+                </button>
+                <button type="button" class="btn btn-danger" id="btnConfirmTransfer">
+                    <i class="fas fa-check me-2"></i>Yes, Transfer Now
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+$(document).ready(function() {
+    // Initialize Select2 for teacher dropdowns in Transfer Timetable
+    $('select[name="source_teacher_id"], select[name="target_teacher_id"]').select2({
+        width: '100%',
+        placeholder: "Search for a teacher...",
+        allowClear: true
+    });
+    
+    // Transfer button click handler
+    $('#btnTransfer').on('click', function() {
+        const sourceId = $('select[name="source_teacher_id"]').val();
+        const targetId = $('select[name="target_teacher_id"]').val();
+        
+        if (!sourceId || !targetId) {
+            alert('Please select both source and target teachers.');
+            return;
+        }
+        
+        if (sourceId === targetId) {
+            alert('Source and target teachers must be different.');
+            return;
+        }
+        
+        // Show confirmation modal
+        const modal = new bootstrap.Modal(document.getElementById('transferModal'));
+        modal.show();
+    });
+    
+    // Confirm transfer
+    $('#btnConfirmTransfer').on('click', function() {
+        $('#transferForm').submit();
+    });
+});
+</script>
 
 </body>
 </html>

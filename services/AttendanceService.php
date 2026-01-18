@@ -18,7 +18,6 @@ class AttendanceService {
     public function markAttendance($teacherId, $date, $status, $source = 'API') {
         // Validation moved inside try/catch in controller usually, or just pass through
         
-        // Validate teacher exists
         $teacher = $this->teacherModel->find($teacherId);
         if (!$teacher) {
             throw new Exception("Teacher ID $teacherId not found.");

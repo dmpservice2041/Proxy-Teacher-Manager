@@ -1,6 +1,8 @@
 vendor/
 exports/
 temp/
+assets/uploads/
+proxy_teacher.db
 *.xlsx
 *.pdf
 *.log

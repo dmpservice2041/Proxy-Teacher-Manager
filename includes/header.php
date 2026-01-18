@@ -4,7 +4,6 @@ if (!isset($_SESSION['user_id'])) {
     exit;
 }
 
-// Fetch Settings for Favicon
 require_once __DIR__ . '/../models/Settings.php';
 $headerSettings = new Settings();
 $headerSchoolLogo = $headerSettings->get('school_logo', '');

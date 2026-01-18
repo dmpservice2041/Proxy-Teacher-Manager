@@ -12,7 +12,6 @@ class User {
         // Rate limiting: Track failed login attempts
         $this->initRateLimiting();
         
-        // Check if account is locked
         if ($this->isRateLimited()) {
             $minutesLeft = ceil(($_SESSION['login_lockout_until'] - time()) / 60);
             return ['success' => false, 'message' => "Too many failed attempts. Try again in {$minutesLeft} minutes."];
@@ -24,13 +23,11 @@ class User {
         $user = $stmt->fetch();
 
         if ($user && password_verify($password, $user['password_hash'])) {
-             // Clear failed attempts on successful login
              $this->clearFailedAttempts();
              
              // Prevent session fixation attacks
              session_regenerate_id(true);
              
-             // Set Session
              $_SESSION['user_id'] = $user['id'];
              $_SESSION['username'] = $user['username'];
              $_SESSION['full_name'] = $user['full_name'] ?? $user['username'];
@@ -38,7 +35,6 @@ class User {
              return true;
         }
         
-        // Track failed attempt
         $this->recordFailedAttempt();
         return false;
     }
@@ -51,7 +47,6 @@ class User {
     }
     
     private function isRateLimited() {
-        // Check if locked out
         if (isset($_SESSION['login_lockout_until']) && $_SESSION['login_lockout_until'] > time()) {
             return true;
         }
@@ -79,7 +74,6 @@ class User {
         unset($_SESSION['login_lockout_until']);
     }
 
-    // Create a new user (Utility for initial setup)
     public function create($username, $password, $role = 'ADMIN') {
         $hash = password_hash($password, PASSWORD_DEFAULT);
         $stmt = $this->pdo->prepare("INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)");

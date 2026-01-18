@@ -25,7 +25,6 @@ if (strtolower($response) !== 'yes') {
 try {
     $pdo->beginTransaction();
     
-    // Delete all timetable entries
     $stmt = $pdo->prepare("DELETE FROM timetable");
     $stmt->execute();
     $deleted = $stmt->rowCount();

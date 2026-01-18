@@ -13,7 +13,6 @@ class MailService {
     public function __construct() {
         $this->settings = new Settings();
         
-        // Load SMTP config from DB (NO FALLBACKS)
         $this->host = $this->settings->get('smtp_host');
         $this->port = $this->settings->get('smtp_port');
         $this->username = $this->settings->get('smtp_username');

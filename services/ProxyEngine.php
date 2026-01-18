@@ -44,7 +44,6 @@ class ProxyEngine {
                 $classId = $lecture['class_id'];
                 $subjectId = $lecture['subject_id'];
 
-                // Check if already assigned (Manual or Auto run previously)
                 // We use 'isAssignedProxy' differently here (checking if slot is covered).
                 // Actually, the DB unique key on (date, proxy_teacher_id, period) prevents a teacher doubling up,
                 // but we need to check if the *class* already has a proxy.

@@ -4,7 +4,6 @@ require_once __DIR__ . '/../services/AttendanceService.php';
 require_once __DIR__ . '/../reports/ProxyExcelReport.php';
 // require_once __DIR__ . '/../reports/ProxyPdfReport.php';
 
-// Set Date (Default to today, or pass via CLI argument or GET)
 $isWeb = php_sapi_name() !== 'cli';
 $date = $_GET['date'] ?? ($argv[1] ?? date('Y-m-d'));
 
@@ -22,7 +21,6 @@ try {
     $attendanceService = new AttendanceService();
 
     // 2. Run Engine (Optional: only if you want auto-fill)
-    // Actually, for reports, we might just want to generate files from existing assignments.
     // If we want to ensure any missing auto-proxies are run:
     // $logs = $engine->generateProxies($date);
 
@@ -31,7 +29,6 @@ try {
         $output = ['success' => true, 'logs' => [], 'files' => []];
     }
 
-    // Check if report classes exist (soft check for dependencies)
     if (class_exists('ProxyExcelReport')) {
         $reportParams = new ProxyExcelReport();
         $file = $reportParams->generateDailyReport($date);

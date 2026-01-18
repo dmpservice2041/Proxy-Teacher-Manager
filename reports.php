@@ -274,7 +274,6 @@ $date = $_GET['date'] ?? date('Y-m-d');
                 <div class="card-body-custom p-3">
                     <div id="recentFilesList">
                         <?php 
-                        // Fetch all Excel files
                         $files = glob("exports/*.{xls,xlsx}", GLOB_BRACE);
                         usort($files, function($a, $b) { return filemtime($b) - filemtime($a); });
                         $files = array_slice($files, 0, 5);
@@ -436,7 +435,6 @@ $(document).ready(function() {
     function loadPreview() {
         const formData = $('#reportForm').serialize();
         
-        // Update display date/range text
         let dateText = '';
         const type = $('#reportType').val();
         if (type === 'daily') {
@@ -516,7 +514,6 @@ $(document).ready(function() {
                 // Ideally, existing logic expects JSON with a file path.
                 
                 try {
-                     // Check if response is JSON (if script returns JSON with file link)
                     if (response.success) {
                         const filename = response.file + '?v=' + new Date().getTime();
                         window.location.href = filename;

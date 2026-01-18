@@ -10,7 +10,6 @@ $service = new AttendanceService();
 $etimeService = new ETimeService();
 $teacherModel = new Teacher();
 
-// Get last sync info (if table exists)
 $lastSync = null;
 try {
     $lastSync = $etimeService->getLastSync();
@@ -19,14 +18,11 @@ try {
 }
 $successMessage = null;
 
-// Handle Form Submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['fetch_from_api'])) {
-        // Fetch attendance from eTime Office API
         try {
             $result = $etimeService->fetchDailyAttendance($date);
             if ($result['success']) {
-                // Get total teachers in database
                 $totalTeachers = count($teacherModel->getAllActive());
                 $apiRecords = $result['total_in_api'] ?? 0;
                 
@@ -72,7 +68,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
     elseif (isset($_POST['teacher_id'])) {
-        // Toggle Status
         $teacherId = $_POST['teacher_id'];
         $currentStatus = $_POST['current_status'];
         $newStatus = ($currentStatus == 'Absent') ? 'Present' : 'Absent';
@@ -87,13 +82,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Fetch Data
 $teachers = $teacherModel->getAllWithDetails(); // Fetch ALL teachers (Active + Inactive)
 
-// Fetch full attendance data for the date
 $attendanceRecords = $service->getAttendanceForDate($date);
 
-// Process attendance into a map and count stats
 $attendanceMap = [];
 $absentCount = 0;
 foreach ($attendanceRecords as $rec) {
@@ -103,15 +95,11 @@ foreach ($attendanceRecords as $rec) {
     }
 }
 
-// Active Count is total teachers
 $activeCount = count($teachers);
-// Present is Active - Absent
 $presentCount = $activeCount - $absentCount;
 
-// Fetch full names for the absent modal
 $absentList = $service->getAbsentTeachers($date);
 
-// Process full lists for other modals
 $presentList = [];
 $activeList = $teachers; // Already fetched and sorted
 
@@ -122,7 +110,6 @@ foreach ($teachers as $t) {
     }
 }
 
-// Sort teachers by Empcode for display consistency
 usort($teachers, function($a, $b) {
     return (int)($a['empcode'] ?? 0) - (int)($b['empcode'] ?? 0);
 });
@@ -584,7 +571,6 @@ usort($teachers, function($a, $b) {
                             $outTime = $att['out_time'] ?? '-';
                             $isActive = $t['is_active'] == 1;
                             
-                            // Styling for inactive
                             $opacity = $isActive ? '1' : '0.5';
                         ?>
                         <tr style="opacity: <?php echo $opacity; ?>">
@@ -654,7 +640,6 @@ usort($teachers, function($a, $b) {
                     </div>
                 <?php else: ?>
                     <?php
-                    // Separate active and inactive teachers
                     $activeAbsent = array_filter($absentList, fn($t) => $t['is_active'] == 1);
                     $inactiveAbsent = array_filter($absentList, fn($t) => $t['is_active'] == 0);
                     ?>
@@ -888,14 +873,12 @@ usort($teachers, function($a, $b) {
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 $(document).ready(function() {
-    // AJAX Attendance Toggle
     $(document).on('click', '.btn-attendance', function() {
         const btn = $(this);
         const id = btn.data('teacher-id');
         const date = btn.data('date');
         const status = btn.data('status'); // Status to SET
         
-        // Disable button to prevent double click
         btn.prop('disabled', true);
         
         $.ajax({
@@ -906,12 +889,10 @@ $(document).ready(function() {
             success: function(resp) {
                 btn.prop('disabled', false);
                 if (resp.success) {
-                    // Update UI without reload
                     const row = btn.closest('tr');
                     const badge = row.find('.status-badge');
                     
                     if (status === 'Present') {
-                        // Was Absent, Now Present
                         btn.html('Mark A')
                            .removeClass('btn-outline-success')
                            .addClass('btn-outline-danger')
@@ -921,7 +902,6 @@ $(document).ready(function() {
                              .removeClass('absent')
                              .addClass('present');
                     } else {
-                        // Was Present, Now Absent
                         btn.html('Mark P')
                            .removeClass('btn-outline-danger')
                            .addClass('btn-outline-success')
@@ -987,12 +967,10 @@ $(document).ready(function() {
         $('#syncConfirmModal').remove();
         $('body').append(modalHtml);
         
-        // Allow DOM to update before showing modal
         setTimeout(() => {
             const modal = new bootstrap.Modal(document.getElementById('syncConfirmModal'));
             modal.show();
             
-            // Add event listener for Sync Now button
             $('#btnConfirmSync').off('click').on('click', function() {
                 modal.hide();
                 executeSyncToErp();
@@ -1055,7 +1033,6 @@ $(document).ready(function() {
             messageText = 'Sync completed with warnings';
         }
         
-        // Build skipped records list if any
         let skippedSection = '';
         if (recordsSkipped > 0 && skippedDetails.length > 0) {
             let skippedList = '';
@@ -1126,7 +1103,6 @@ $(document).ready(function() {
             </div>
         `;
         
-        // Remove existing modal if any
         $('#syncResultModal').remove();
         $('body').append(modalHtml);
         const modal = new bootstrap.Modal(document.getElementById('syncResultModal'));

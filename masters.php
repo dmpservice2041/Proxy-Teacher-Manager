@@ -185,12 +185,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $activeSections = $sectionModel->getAllOrderedByPriority();
 
 if ($tab == 'teachers') {
-    // Validate sort column
     $allowedSortColumns = ['id' => 't.id', 'name' => 't.name', 'empcode' => 't.empcode'];
     $sortColumn = $allowedSortColumns[$sortBy] ?? 't.id';
     $sortDirection = strtoupper($sortOrder) === 'DESC' ? 'DESC' : 'ASC';
     
-    // Fetch teachers with sorting
     $stmt = $pdo->query("
         SELECT t.*, GROUP_CONCAT(s.name SEPARATOR ', ') as section_names
         FROM teachers t

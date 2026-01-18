@@ -34,9 +34,7 @@ try {
     // 2. Assign
     $proxyModel = new ProxyAssignment();
     
-    // Check if already assigned? Transaction will fail or we can overwrite if logic permits. 
     // The requirement says "Manual assignment overrides automatic logic".
-    // If there is an existing assignment, we might need to delete it first or update it.
     // The unique key is (date, proxy_teacher, period). But we want to replace the assignment for the *Absent Teacher's Slot*.
     // Our schema doesn't have a unique key on (date, absent_teacher, period)... which might be a flaw if we want to strictly prevent duplicates.
     // But let's assume we just add this Manual one.

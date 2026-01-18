@@ -15,7 +15,6 @@ class ProxyExcelReport {
     }
 
     public function generateDailyReport($date) {
-        // Fetch data
         $sql = "
             SELECT 
                 pa.date,
@@ -106,7 +105,6 @@ class ProxyExcelReport {
             $sheet->setCellValue('F' . $row, $record['proxy_teacher']);
             $sheet->setCellValue('G' . $row, ""); // Sign column is blank for physical signature
             
-            // Set double row height
             $sheet->getRowDimension($row)->setRowHeight(40); 
             $row++;
         }

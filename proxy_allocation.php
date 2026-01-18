@@ -7,7 +7,8 @@ require_once 'includes/header.php';
 require_once 'services/ProxyAllocationService.php';
 
 $allocationService = new ProxyAllocationService();
-$date = $_GET['date'] ?? date('Y-m-d');
+$date = $_POST['date_param'] ?? $_GET['date'] ?? date('Y-m-d');
+$allocationService->enableBulkMode($date); // Optimization: Preload all data for the day
 $message = '';
 $error = '';
 
@@ -42,12 +43,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_all'])) {
         $proxyModel = new ProxyAssignment();
         $proxyModel->deleteAllForDate($date);
         $message = "All proxy assignments for " . $date . " have been deleted.";
+        // Use JavaScript redirect to preserve date parameter
+        echo '<script>window.location.href = "proxy_allocation.php?date=' . urlencode($date) . '";</script>';
+        exit;
     } catch (Exception $e) {
         $error = "Error deleting allocations: " . $e->getMessage();
     }
 }
 
-// Handle Daily Overrides (Add/Delete)
 require_once 'models/DailyOverrides.php';
 $overridesModel = new DailyOverrides();
 
@@ -74,10 +77,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_override'])) {
     }
 }
 
-// Fetch all overrides for display
 $todaysOverrides = $overridesModel->getAllForDate($date);
 
-// Fetch Lists for Modal
 require_once 'models/Teacher.php';
 require_once 'models/Classes.php';
 $allTeachersList = (new Teacher())->getAllActive(); 
@@ -421,6 +422,7 @@ $absentSlots = $allocationService->getAbsentSlots($date);
     <?php endif; ?>
 
     <form method="POST" id="allocationForm">
+        <input type="hidden" name="date_param" value="<?php echo htmlspecialchars($date); ?>">
         <div class="table-card">
             <div class="table-responsive">
                 <table class="table mb-0">
@@ -823,7 +825,6 @@ $(document).ready(function() {
 
     // 3. Free Period Calculation
     function updateFreePeriodCounts() {
-        // Update every option in every dropdown
         $('.candidate-select').each(function() {
             const $select = $(this);
             
@@ -954,7 +955,6 @@ $(document).ready(function() {
         $('#autoGenerateConfirmModal').remove();
         $('body').append(modalHtml);
         
-        // Allow DOM to update before showing modal
         setTimeout(() => {
             const modal = new bootstrap.Modal(document.getElementById('autoGenerateConfirmModal'));
             modal.show();
@@ -1013,7 +1013,7 @@ $(document).ready(function() {
                                 <div class="small text-white opacity-75">Assignments Created</div>
                             </div>
                             
-                            <button type="button" class="btn btn-primary px-4 mt-4" onclick="location.reload()">
+                            <button type="button" class="btn btn-primary px-4 mt-4" onclick="window.location.href='proxy_allocation.php?date=<?php echo urlencode($date); ?>'">
                                 <i class="fas fa-sync-alt me-2"></i>Reload & View Assignments
                             </button>
                         </div>
@@ -1025,6 +1025,12 @@ $(document).ready(function() {
         $('#autoGenerateResultModal').remove();
         $('body').append(modalHtml);
         const modal = new bootstrap.Modal(document.getElementById('autoGenerateResultModal'));
+        
+        // Auto-reload when modal is closed (clicked X or outside)
+        document.getElementById('autoGenerateResultModal').addEventListener('hidden.bs.modal', function () {
+            window.location.href = 'proxy_allocation.php?date=<?php echo urlencode($date); ?>';
+        });
+        
         modal.show();
     }
     

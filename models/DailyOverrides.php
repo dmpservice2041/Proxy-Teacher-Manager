@@ -8,7 +8,6 @@ class DailyOverrides {
         $this->pdo = Database::getInstance()->getConnection();
     }
 
-    // Add a new override
     public function add($date, $type, $targetId, $period = null, $reason = null) {
         $stmt = $this->pdo->prepare("
             INSERT INTO daily_overrides (date, type, target_id, period_no, reason)
@@ -17,13 +16,11 @@ class DailyOverrides {
         return $stmt->execute([$date, $type, $targetId, $period, $reason]);
     }
 
-    // Delete an override
     public function delete($id) {
         $stmt = $this->pdo->prepare("DELETE FROM daily_overrides WHERE id = ?");
         return $stmt->execute([$id]);
     }
 
-    // Get all overrides for a specific date (useful for UI list)
     public function getAllForDate($date) {
         $stmt = $this->pdo->prepare("
             SELECT do.*, 
@@ -42,7 +39,6 @@ class DailyOverrides {
         return $stmt->fetchAll();
     }
 
-    // Fetch mapped overrides for efficient lookup in Proxy Service
     // Returns: ['TEACHER_DUTY' => [TID => [Period => true]], 'CLASS_ABSENCE' => [CID => [Period => true]]]
     public function getOverridesMap($date) {
         $stmt = $this->pdo->prepare("SELECT * FROM daily_overrides WHERE date = ?");
@@ -63,9 +59,6 @@ class DailyOverrides {
                 $map[$type][$tid] = [];
             }
             
-            // If period is NULL, we might use strict check or convention (e.g. key 'all')
-            // Using logic: if specific period set, key is period. If null, handle specially.
-            // Let's store 0 for All Day to simplify array keys
             $key = $p === null ? 0 : $p;
             $map[$type][$tid][$key] = true;
         }

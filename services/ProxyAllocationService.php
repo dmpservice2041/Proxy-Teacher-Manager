@@ -15,6 +15,19 @@ class ProxyAllocationService {
     private $settingsModel;
     private $pdo; // Added PDO property
 
+    // Bulk Preloading Cache
+    private $isBulkMode = false;
+    private $cacheDate = null;
+    private $attendanceCache = [];
+    private $timetableCache = [];
+    private $teacherClassesCache = [];
+    private $sectionPrioritiesCache = [];
+    private $teacherPrioritiesCache = [];
+    private $teacherSubjectsCache = [];
+    private $blockedTodayCache = [];
+    private $overridesMapCache = [];
+    private $classEntriesCache = [];
+
     public function __construct() {
         $this->teacherModel = new Teacher();
         $this->attendanceModel = new Attendance();
@@ -30,6 +43,86 @@ class ProxyAllocationService {
         require_once __DIR__ . '/../models/DailyOverrides.php';
         $this->dailyOverridesModel = new DailyOverrides();
     }
+
+    /**
+     * Enable bulk mode to preload all data for a specific date.
+     * Use this when processing multiple slots for the same date.
+     */
+    public function enableBulkMode($date) {
+        if ($this->isBulkMode && $this->cacheDate === $date) {
+            return;
+        }
+        
+        $this->isBulkMode = true;
+        $this->cacheDate = $date;
+        $this->preloadBatchData($date);
+    }
+
+    /**
+     * Preload all necessary data for the given date into memory.
+     */
+    private function preloadBatchData($date) {
+        $dayOfWeek = date('N', strtotime($date));
+        $dayName = date('l', strtotime($date));
+
+        // 1. Preload Attendance
+        $stmt = $this->pdo->prepare("SELECT teacher_id FROM teacher_attendance WHERE date = ? AND status = 'Present'");
+        $stmt->execute([$date]);
+        $rows = $stmt->fetchAll(PDO::FETCH_COLUMN, 0);
+        $this->attendanceCache = array_flip($rows); // For O(1) lookup
+        // 2a. Preload Timetable (Entire Day with Joins)
+        $stmt = $this->pdo->prepare("
+            SELECT t.*, c.standard, c.division, s.name as subject_name
+            FROM timetable t
+            LEFT JOIN classes c ON t.class_id = c.id
+            LEFT JOIN subjects s ON t.subject_id = s.id
+            WHERE t.day_of_week = ?
+        ");
+        $stmt->execute([$dayOfWeek]);
+        $timetableData = $stmt->fetchAll();
+        
+        $this->timetableCache = [];
+        $this->classEntriesCache = [];
+        foreach ($timetableData as $row) {
+            $tid = $row['teacher_id'];
+            $cid = $row['class_id'];
+            $p = $row['period_no'];
+            
+            $this->timetableCache[$tid][] = $row;
+            $this->classEntriesCache[$cid][$p][] = $row;
+        }
+
+        // 2b. Preload FULL week teacher classes (to identify Floaters correctly)
+        // BUG FIX: Fetch from all days, not just today.
+        $stmtFull = $this->pdo->query("SELECT DISTINCT teacher_id, class_id FROM timetable");
+        $allTeacherClasses = $stmtFull->fetchAll();
+        
+        $this->teacherClassesCache = [];
+        foreach ($allTeacherClasses as $row) {
+            $this->teacherClassesCache[$row['teacher_id']][$row['class_id']] = true;
+        }
+
+        // 3. Preload Blocked Periods
+        $allBlocked = $this->blockedPeriodModel->getBlockedPeriods();
+        $this->blockedTodayCache = $allBlocked[$dayName] ?? [];
+
+        // 4. Preload Daily Overrides
+        $this->overridesMapCache = $this->dailyOverridesModel->getOverridesMap($date);
+
+        // 5. Preload Section Priorities (Classes)
+        $stmt = $this->pdo->query("
+            SELECT c.id as class_id, s.priority 
+            FROM classes c 
+            JOIN sections s ON c.section_id = s.id
+        ");
+        $this->sectionPrioritiesCache = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
+
+        // 6. Preload Teacher Section Priorities
+        $this->teacherPrioritiesCache = $this->getTeacherPriorities();
+
+        // 7. Preload Teacher Subject Expertise
+        $this->teacherSubjectsCache = $this->getTeacherSubjectsMap();
+    }
     
     // ... existing code ...
 
@@ -43,7 +136,11 @@ class ProxyAllocationService {
         $dayName = date('l', strtotime($date)); // e.g., Saturday
 
         // 0. Check if this period is globally blocked for everyone
-        if ($this->blockedPeriodModel->isBlocked($dayName, $periodNo)) {
+        if ($this->isBulkMode) {
+            if (isset($this->blockedTodayCache[$periodNo]['global'])) {
+                return [];
+            }
+        } elseif ($this->blockedPeriodModel->isBlocked($dayName, $periodNo)) {
             return [];
         }
 
@@ -52,13 +149,9 @@ class ProxyAllocationService {
 
         $totalPeriods = $this->settingsModel->get('total_periods', 8);
         
-        // Fetch all blocked periods
-        $allBlocked = $this->blockedPeriodModel->getBlockedPeriods();
-        $blockedToday = $allBlocked[$dayName] ?? [];
+        $blockedToday = $this->isBulkMode ? $this->blockedTodayCache : ($this->blockedPeriodModel->getBlockedPeriods()[$dayName] ?? []);
         
-        // Fetch Daily Overrides
-        // Map: ['TEACHER_DUTY' => [TID => [Period => true]], 'CLASS_ABSENT' => [CID => [Period => true]]]
-        $overridesMap = $this->dailyOverridesModel->getOverridesMap($date);
+        $overridesMap = $this->isBulkMode ? $this->overridesMapCache : $this->dailyOverridesModel->getOverridesMap($date);
         $teacherDutyMap = $overridesMap['TEACHER_DUTY'] ?? [];
         $classAbsentMap = $overridesMap['CLASS_ABSENT'] ?? [];
 
@@ -66,7 +159,11 @@ class ProxyAllocationService {
             $tid = $teacher['id'];
 
             // 1. Must be Present
-            if (!$this->attendanceModel->isPresent($tid, $date)) continue;
+            if ($this->isBulkMode) {
+                if (!isset($this->attendanceCache[$tid])) continue;
+            } else {
+                if (!$this->attendanceModel->isPresent($tid, $date)) continue;
+            }
             
             // 2. DAILY OVERRIDE: Check if Teacher is on Duty (Busy) for this period
             if (isset($teacherDutyMap[$tid])) {
@@ -77,9 +174,8 @@ class ProxyAllocationService {
             }
 
             // 3. Check Timetable Schedule (Busy or Free?)
-            $schedule = $this->timetableModel->getTeacherSchedule($tid, $dayOfWeek);
+            $schedule = $this->isBulkMode ? ($this->timetableCache[$tid] ?? []) : $this->timetableModel->getTeacherSchedule($tid, $dayOfWeek);
             $busyPeriods = []; 
-            // Build map of Period -> ClassID to handle Class Absence logic
             foreach ($schedule as $s) {
                 $busyPeriods[$s['period_no']] = $s['class_id'];
             }
@@ -98,8 +194,7 @@ class ProxyAllocationService {
             
             // --- Teacher is a candidate! Calculate Free Periods Count ---
 
-            // Get teacher's classes for validity check
-            $teacherClasses = $this->timetableModel->getTeacherClasses($tid);
+            $teacherClasses = $this->isBulkMode ? (isset($this->teacherClassesCache[$tid]) ? array_keys($this->teacherClassesCache[$tid]) : []) : $this->timetableModel->getTeacherClasses($tid);
             
             $freePeriods = 0;
             // Iterate all possible periods for the day
@@ -112,11 +207,10 @@ class ProxyAllocationService {
                 
                 // If teacher is BUSY in Timetable
                 if (isset($busyPeriods[$p])) {
-                     // Check if Class Absent exception applies
                      $cid = $busyPeriods[$p];
                      $isClassAbsent = isset($classAbsentMap[$cid]) && (isset($classAbsentMap[$cid][$p]) || isset($classAbsentMap[$cid][0]));
                      if (!$isClassAbsent) {
-                         continue; // Truly Busy
+                          continue; // Truly Busy
                      }
                 }
                 
@@ -167,33 +261,18 @@ class ProxyAllocationService {
         $existingAssignments = $this->proxyModel->getAssignmentsForDate($date);
 
         // Pre-fetch all blocked periods to optimize loop
-        // Structure: [Day][Period][ClassID/Global]
-        // But getBlockedPeriods returns [Day][Period][Entity] (Global/ClassID) => true
-        // Actually my getBlockedPeriods returns [day][period][id] = true
-        $allBlocked = $this->blockedPeriodModel->getBlockedPeriods(); 
-        $blockedToday = $allBlocked[$dayName] ?? [];
+        $blockedToday = $this->isBulkMode ? $this->blockedTodayCache : ($this->blockedPeriodModel->getBlockedPeriods()[$dayName] ?? []);
+        
+        $classAbsentMap = $this->isBulkMode ? ($this->overridesMapCache['CLASS_ABSENT'] ?? []) : ($this->dailyOverridesModel->getOverridesMap($date)['CLASS_ABSENT'] ?? []);
 
         foreach ($absentTeachers as $teacher) {
-            $schedule = $this->timetableModel->getTeacherSchedule($teacher['id'], $dayOfWeek);
+            $schedule = $this->isBulkMode ? ($this->timetableCache[$teacher['id']] ?? []) : $this->timetableModel->getTeacherSchedule($teacher['id'], $dayOfWeek);
             foreach ($schedule as $lecture) {
                 
                 // CHECK BLOCKS:
                 // 1. Is Period Globally Blocked?
                 if (isset($blockedToday[$lecture['period_no']]['global'])) {
                     continue; 
-                }
-                // 1.5 Is Class marked ABSENT/CLOSED for today (Daily Override)?
-                // Need map here? Or fetch logic... 
-                // For list of absent slots, we typically care about classes that ARE happening but teacher isn't there.
-                // If class is marked Absent/Trip, then NO PROXY is needed, right?
-                // YES! So we should skip this slot if Class is Absent.
-                
-                // Fetch overrides if not already fetched? (This method fetches entries for whole day)
-                // Let's assume we need to instantiate check inside loop or pre-fetch.
-                // Pre-fetching...
-                if (!isset($classAbsentMap)) {
-                     $overridesMap = $this->dailyOverridesModel->getOverridesMap($date);
-                     $classAbsentMap = $overridesMap['CLASS_ABSENT'] ?? [];
                 }
                 
                 $cid = $lecture['class_id'];
@@ -207,9 +286,11 @@ class ProxyAllocationService {
                     continue;
                 }
 
-                // Check if this period has multiple entries (i.e., is it a group class?)
-                // We need to differentiate if there are other classes in the same slot
-                $classEntries = $this->timetableModel->getClassPeriodEntries($lecture['class_id'], $dayOfWeek, $lecture['period_no']);
+                if ($this->isBulkMode) {
+                    $classEntries = $this->classEntriesCache[$lecture['class_id']][$lecture['period_no']] ?? [];
+                } else {
+                    $classEntries = $this->timetableModel->getClassPeriodEntries($lecture['class_id'], $dayOfWeek, $lecture['period_no']);
+                }
                 $isGroupClass = count($classEntries) > 1;
 
                 // Determine Group Name
@@ -246,23 +327,14 @@ class ProxyAllocationService {
      * Returns [class_id => priority_int]
      */
     private function getClassPriorities() {
+        if ($this->isBulkMode) {
+            return $this->sectionPrioritiesCache;
+        }
         // We need to join classes -> sections
         require_once __DIR__ . '/../models/Classes.php';
         $classModel = new Classes();
-        $classes = $classModel->getAll(); // returns row with section_name, need priority?
+        $classes = $classModel->getAll(); 
         
-        // Classes::getAll() query: SELECT c.*, s.name... 
-        // We need 'priority' from sections. 
-        // Let's modify the query locally or assume check if 'priority' is in result.
-        // It is NOT in getAll(). Need to fetch it.
-        
-        // Better: Fetch all sections map [id => priority]
-        // Then map class -> section_id -> priority
-        require_once __DIR__ . '/../models/Section.php';
-        // Assume Section model exists or query directly. 
-        // Let's query directly via PDO for efficiency here or add method to Settings/Master
-        
-        // Fallback: Query manually here for speed
         $stmt = $this->pdo->query("SELECT id, priority FROM sections");
         $sectionPriorities = $stmt->fetchAll(PDO::FETCH_KEY_PAIR); // [id => priority]
         
@@ -279,6 +351,9 @@ class ProxyAllocationService {
      * Returns [teacher_id => priority_int]
      */
     private function getTeacherPriorities() {
+        if ($this->isBulkMode && !empty($this->teacherPrioritiesCache)) {
+            return $this->teacherPrioritiesCache;
+        }
         // Teacher -> teacher_sections -> sections.priority
         // If teacher has multiple sections, take the HIGHEST priority (Min Int value)? 
         // Or Main Section? Let's assume Highest (Min).
@@ -298,7 +373,9 @@ class ProxyAllocationService {
      * Returns [teacher_id => [subject_id => true]]
      */
     private function getTeacherSubjectsMap() {
-        // Get explicit assignments first
+        if ($this->isBulkMode && !empty($this->teacherSubjectsCache)) {
+            return $this->teacherSubjectsCache;
+        }
         $sql = "SELECT teacher_id, subject_id FROM teacher_subjects";
         $stmt = $this->pdo->query($sql);
         $rows = $stmt->fetchAll();
@@ -332,18 +409,15 @@ class ProxyAllocationService {
         $matchesSection = false;
         
         if ($pTeach == 99) {
-            // FLOATING TEACHER (No section assignment, e.g. extra staff, librarian, etc.)
             // Give a neutral base score - they're available but not section-specific
             $score += 35; // Neutral baseline - lower than perfect match, higher than large gap
         } elseif ($pTeach == $classPriority) {
             $score += 100; // Perfect Section Match
             $matchesSection = true;
         } elseif ($pTeach > $classPriority) {
-            // Teacher is from Lower priority (e.g. Class=1, Teacher=2)
             $diff = $pTeach - $classPriority;
             $score += max(0, 50 - ($diff * 10)); // Gap 1=40, Gap 2=30...
         } else {
-             // Teacher is from Higher priority (e.g. Class=2, Teacher=1)
              // Use senior resource for junior class? Allowed but less preferred
              $diff = $classPriority - $pTeach;
              $score += max(0, 30 - ($diff * 10));
@@ -368,6 +442,7 @@ class ProxyAllocationService {
      * AUTO ALLOCATE ALL EMPTY SLOTS
      */
     public function autoAllocateAll($date) {
+        $this->enableBulkMode($date);
         $emptySlots = $this->getAbsentSlots($date); 
         
         // 2. Pre-load Maps for efficiency
@@ -390,7 +465,6 @@ class ProxyAllocationService {
                  // Optional: Skip complex group classes
             }
             
-            // Get Candidates for this specific slot
             // Note: This fetches from DB, so it doesn't know about assignments we just made in variables
             $candidates = $this->getAvailableCandidates($date, $slot['period_no']);
             
@@ -421,7 +495,6 @@ class ProxyAllocationService {
                 // Usually means: Can only assign if remaining free AFTER this assignment would be >= 0?
                 // User said: "if teacher has 1 free period then do not give them proxy". 
                 // This implies they need to KEEP at least 1 free period? Or they simply are too busy?
-                // Interpretation: Threshold is > 1. i.e. 2 or more.
                 if ($realFreePeriods <= 1) {
                     continue; // Preservation Rule: Don't consume their last free period (or single free period)
                 }

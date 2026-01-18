@@ -24,7 +24,6 @@ $blockedPeriodModel = new BlockedPeriod();
 $totalPeriods = $settingsModel->get('total_periods', 8);
 $days = [1 => 'Monday', 2 => 'Tuesday', 3 => 'Wednesday', 4 => 'Thursday', 5 => 'Friday', 6 => 'Saturday'];
 
-// Handle Add/Edit/Delete Schedule
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
         if (isset($_POST['delete_entry'])) {
@@ -46,7 +45,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                  $error = "Cannot add entry: Period $period is BLOCKED for this class on $dayName.";
             } else {
                 if ($entryId) {
-                    // Update existing
                     $timetableModel->update($entryId, $cid, $sid, $groupName);
                     $message = "Timetable entry updated.";
                 } else {
@@ -102,7 +100,6 @@ try {
     $subjects = [];
 }
 
-// Fetch Schedule for Display
 $schedule = [];
 if ($viewMode === 'teacher' && $teacherId) {
     for ($d = 1; $d <= 6; $d++) {
@@ -587,7 +584,6 @@ if ($viewMode === 'teacher' && $teacherId) {
                                                          $blockReason = "Class Closed";
                                                      }
                                                 } elseif ($viewMode === 'teacher' && $teacherId) {
-                                                     // Check if ALL teacher's classes are blocked
                                                      // Requires fetching teacher classes. Can be slow in loop? 
                                                      // For View Mode, maybe just check if existing slot coincides? No, we want empty slots to show blocked.
                                                      // We'll trust the general logic: If "Free" (empty) AND calculated as "Off", show blocked.
@@ -887,7 +883,6 @@ function openSlotModal(element) {
     const isBlocked = element.classList.contains('blocked');
     
     if (isBlocked) {
-        // If it's blocked, we might want to just show an alert or prevent opening?
         // User requested "shows blocked in red" -> which we did. 
         // If they click, we can show a warning modal or just disable inputs.
         // Let's allow opening to VIEW (if slots exist) but disable EDITING.
@@ -911,12 +906,10 @@ function openSlotModal(element) {
     $('#saveBtn').prop('disabled', false);
     
     // If we want to strictly prevent adding for a SPECIFIC class that wasn't caught by the main view block:
-    // (e.g. Teacher View -> Click open slot -> Select Class 10 (which is blocked))
     // We need JS to check the selected class against valid periods. 
     // This is complex client-side. Server-side validation (already added) covers this.
 
 
-    // Set Hidden Values
     document.getElementById('dayOfWeek').value = day;
     document.getElementById('periodNo').value = period;
     document.getElementById('slotInfo').value = dayNames[day] + ' - Period ' + period;
@@ -957,7 +950,6 @@ function openSlotModal(element) {
         $('#subjectId').val(firstSlot.subject_id).trigger('change');
         $('#groupName').val(firstSlot.group_name || '');
         
-        // Handle Teacher Select in Edit Mode
         if (viewMode === 'class') {
              $('#teacherIdSelect').val(firstSlot.teacher_id).trigger('change');
         }

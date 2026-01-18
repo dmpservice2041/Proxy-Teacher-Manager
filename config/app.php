@@ -1,7 +1,6 @@
 <?php
 // Global Application Configuration
 
-// Load database config and try to fetch school name from settings
 require_once __DIR__ . '/database.php';
 try {
     $pdo = Database::getInstance()->getConnection();
@@ -65,7 +64,6 @@ function logError($exception, $context = '') {
     $logDir = dirname($logFile);
     
     try {
-        // Ensure log directory exists
         if (!is_dir($logDir)) {
             @mkdir($logDir, 0755, true);
         }

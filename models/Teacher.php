@@ -8,8 +8,6 @@ class Teacher {
         $this->pdo = Database::getInstance()->getConnection();
     }
 
-    // Fetch all active teachers
-    // Fetch all active teachers (with section_ids)
     public function getAllActive() {
         $stmt = $this->pdo->prepare("
              SELECT t.*, GROUP_CONCAT(ts.section_id) as section_ids
@@ -35,14 +33,12 @@ class Teacher {
         return $stmt->fetchAll();
     }
 
-    // Find teacher by ID
     public function find($id) {
         $stmt = $this->pdo->prepare("SELECT * FROM teachers WHERE id = ?");
         $stmt->execute([$id]);
         return $stmt->fetch();
     }
 
-    // Get subjects taught by a teacher
     public function getSubjects($teacherId) {
         $stmt = $this->pdo->prepare("
             SELECT s.* 
@@ -54,7 +50,6 @@ class Teacher {
         return $stmt->fetchAll();
     }
     
-    // Get Section details for a teacher
     public function getSections($teacherId) {
         $stmt = $this->pdo->prepare("
             SELECT s.* 
@@ -95,7 +90,6 @@ class Teacher {
     public function update($id, $name, $empcode, $isActive, $sectionIds = []) {
         $this->pdo->beginTransaction();
         try {
-            // Update Teacher Basic Info
             $stmt = $this->pdo->prepare("
                 UPDATE teachers 
                 SET name = ?, empcode = ?, is_active = ?
@@ -103,7 +97,6 @@ class Teacher {
             ");
             $stmt->execute([$name, $empcode, $isActive, $id]);
 
-            // Update Sections (Delete all and re-add)
             $delStmt = $this->pdo->prepare("DELETE FROM teacher_sections WHERE teacher_id = ?");
             $delStmt->execute([$id]);
 
@@ -123,7 +116,6 @@ class Teacher {
     }
 
     public function delete($id) {
-        // Check if teacher has any proxy assignments (as absent or proxy teacher)
         $stmt = $this->pdo->prepare("
             SELECT COUNT(*) as count FROM proxy_assignments 
             WHERE absent_teacher_id = ? OR proxy_teacher_id = ?
@@ -138,7 +130,6 @@ class Teacher {
             );
         }
         
-        // Check if teacher has timetable entries
         $stmt = $this->pdo->prepare("SELECT COUNT(*) as count FROM timetable WHERE teacher_id = ?");
         $stmt->execute([$id]);
         $result = $stmt->fetch();
@@ -150,7 +141,6 @@ class Teacher {
             );
         }
         
-        // Check if teacher has attendance records
         $stmt = $this->pdo->prepare("SELECT COUNT(*) as count FROM teacher_attendance WHERE teacher_id = ?");
         $stmt->execute([$id]);
         $result = $stmt->fetch();
@@ -173,7 +163,6 @@ class Teacher {
         return $stmt->execute([$id]);
     }
 
-    // Find teacher by employee code (for API integration)
     public function findByEmpcode($empcode) {
         $stmt = $this->pdo->prepare("SELECT * FROM teachers WHERE empcode = ?");
         $stmt->execute([$empcode]);

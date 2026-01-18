@@ -20,13 +20,11 @@ class ETimeService {
         $this->db = Database::getInstance()->getConnection();
         $this->settings = new Settings();
         
-        // Load config from DB (NO FALLBACKS)
         $corpId = $this->settings->get('api_corporate_id');
         $username = $this->settings->get('api_username');
         $password = $this->settings->get('api_password');
         $baseUrl = $this->settings->get('api_base_url');
 
-        // Check if settings are present
         if (empty($corpId) || empty($username) || empty($password) || empty($baseUrl)) {
             // We can't throw Exception in constructor if we want the app to load partially
             // But this service won't work. We'll handle it during API calls.
@@ -84,7 +82,6 @@ class ETimeService {
             // Convert date to eTime Office format (dd/MM/yyyy)
             $etimeDate = date('d/m/Y', strtotime($date));
             
-            // Build API URL
             $url = sprintf(
                 '%s%s?Empcode=ALL&FromDate=%s&ToDate=%s',
                 $this->config['base_url'],
@@ -102,7 +99,6 @@ class ETimeService {
                 // Mark employees not in API as absent
                 $missingResult = $this->markMissingEmployeesAsAbsent($response['InOutPunchData'], $date);
                 
-                // Get statistics about all employees
                 $teacherModel = new Teacher();
                 $allActiveTeachers = $teacherModel->getAllActive();
                 $allTeachers = $teacherModel->getAllWithDetails();
@@ -153,7 +149,6 @@ class ETimeService {
                 foreach ($allTeachers as $teacher) {
                     if (empty($teacher['empcode'])) {
                         try {
-                            // Check if already has attendance record
                             $currentAtt = $attendanceModel->getAttendanceForTeacher($teacher['id'], $date);
                             if (!$currentAtt) {
                                 // No attendance record - mark as absent since we can't fetch from API
@@ -301,7 +296,6 @@ class ETimeService {
                     continue;
                 }
 
-                // Find teacher by empcode (include inactive teachers too)
                 // Normalize empcode for lookup (ensure string)
                 $empcodeNormalized = trim((string)$empcode);
                 $teacher = $teacherModel->findByEmpcode($empcodeNormalized);
@@ -314,7 +308,6 @@ class ETimeService {
                     continue;
                 }
                 
-                // Process both active and inactive teachers (API sends all employees)
 
                 // Extract times (Keys are Case Sensitive from API)
                 $inTime = $record['INTime'] ?? null;
@@ -373,7 +366,6 @@ class ETimeService {
         $teacherModel = new Teacher();
         $attendanceModel = new Attendance();
         
-        // Get ALL teachers (active and inactive) with empcodes - API sends all employees
         $allTeachers = $teacherModel->getAllWithDetails();
         
         // Extract employee codes from API response (normalize for comparison)
@@ -401,14 +393,12 @@ class ETimeService {
             $teacherEmpcode = trim((string)$teacher['empcode']); // Ensure string
             $teacherEmpcodeLower = strtolower($teacherEmpcode);
             
-            // Check if this teacher's empcode is in the API response
             // Use strict comparison and normalized lookup
             $isInApi = in_array($teacherEmpcode, $apiEmpcodes, true) || 
                       isset($apiEmpcodesNormalized[$teacherEmpcodeLower]);
             
             if (!$isInApi) {
                 try {
-                    // Check if already locked
                     if ($attendanceModel->isLocked($teacher['id'], $date)) {
                         continue;
                     }
@@ -438,16 +428,13 @@ class ETimeService {
                 }
                 
                 if ($apiRecord) {
-                    // Check if status indicates absent but database might have wrong status
                     $apiStatus = trim($apiRecord['Status'] ?? '');
                     $apiInTime = $apiRecord['INTime'] ?? null;
                     $apiOutTime = $apiRecord['OUTTime'] ?? null;
                     
-                    // Check if times are empty/null
                     if ($apiInTime == '--:--' || $apiInTime === '' || $apiInTime === null) $apiInTime = null;
                     if ($apiOutTime == '--:--' || $apiOutTime === '' || $apiOutTime === null) $apiOutTime = null;
                     
-                    // If no times OR status is A/empty, employee should be Absent
                     $shouldBeAbsent = ($apiInTime === null && $apiOutTime === null) || 
                                      ($apiStatus === '' || strtoupper($apiStatus) === 'A');
                     
@@ -507,7 +494,6 @@ class ETimeService {
             return 'Absent';
         }
         
-        // Check if status is in mapping (case-insensitive)
         if (isset($this->config['status_mapping'][$baseStatus])) {
             return $this->config['status_mapping'][$baseStatus];
         }
@@ -611,7 +597,6 @@ class ETimeService {
             $endDate = date('d/m/Y');
             $startDate = date('d/m/Y', strtotime("-{$daysBack} days"));
             
-            // Build API URL
             $url = sprintf(
                 '%s%s?Empcode=ALL&FromDate=%s&ToDate=%s',
                 $this->config['base_url'],
@@ -683,7 +668,6 @@ class ETimeService {
         
         foreach ($result['teachers'] as $teacherData) {
             try {
-                // Check if teacher already exists
                 $existing = $teacherModel->findByEmpcode($teacherData['empcode']);
                 
                 if ($existing) {

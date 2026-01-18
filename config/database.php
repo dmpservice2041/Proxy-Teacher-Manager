@@ -5,9 +5,9 @@ class Database {
     private $pdo;
 
     private $host = 'localhost';
-    private $db   = 'proxy_teacher_db'; // Default DB name, user might need to change
+    private $db   = 'proxy_teacher_db';
     private $user = 'root';
-    private $pass = ''; // Default XAMPP password is empty
+    private $pass = '';
     private $charset = 'utf8mb4';
 
     private function __construct() {

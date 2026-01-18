@@ -9,13 +9,11 @@ class Timetable {
     }
 
     public function getTeacherSchedule($teacherId, $dayOfWeek) {
-        // Check if group_name column exists
         $hasGroupName = false;
         try {
             $checkStmt = $this->pdo->query("SHOW COLUMNS FROM timetable LIKE 'group_name'");
             $hasGroupName = $checkStmt->rowCount() > 0;
         } catch (Exception $e) {
-            // Column doesn't exist or error checking
         }
         
         $orderBy = $hasGroupName ? "ORDER BY t.period_no ASC, t.group_name ASC" : "ORDER BY t.period_no ASC";
@@ -32,15 +30,12 @@ class Timetable {
         return $stmt->fetchAll();
     }
 
-    // Get all lectures for a class on a specific day
     public function getClassSchedule($classId, $dayOfWeek) {
-        // Check if group_name column exists
         $hasGroupName = false;
         try {
             $checkStmt = $this->pdo->query("SHOW COLUMNS FROM timetable LIKE 'group_name'");
             $hasGroupName = $checkStmt->rowCount() > 0;
         } catch (Exception $e) {
-            // Column doesn't exist or error checking
         }
         
         $orderBy = $hasGroupName ? "ORDER BY t.period_no ASC, t.group_name ASC" : "ORDER BY t.period_no ASC";
@@ -57,15 +52,12 @@ class Timetable {
         return $stmt->fetchAll();
     }
 
-    // Get all timetable entries for a specific class, day, and period (for group classes)
     public function getClassPeriodEntries($classId, $dayOfWeek, $periodNo) {
-        // Check if group_name column exists
         $hasGroupName = false;
         try {
             $checkStmt = $this->pdo->query("SHOW COLUMNS FROM timetable LIKE 'group_name'");
             $hasGroupName = $checkStmt->rowCount() > 0;
         } catch (Exception $e) {
-            // Column doesn't exist or error checking
         }
         
         $orderBy = $hasGroupName ? "ORDER BY t.group_name ASC" : "ORDER BY t.id ASC";
@@ -83,7 +75,6 @@ class Timetable {
         return $stmt->fetchAll();
     }
 
-    // Check if a teacher is busy in a specific slot
     public function isTeacherBusy($teacherId, $dayOfWeek, $periodNo) {
         $stmt = $this->pdo->prepare("
             SELECT COUNT(*) FROM timetable 
@@ -93,7 +84,6 @@ class Timetable {
         return $stmt->fetchColumn() > 0;
     }
 
-    // Count total free periods for a teacher on a given day (assuming 8 periods a day for example, or based on max periods in DB)
     public function countFreePeriods($teacherId, $dayOfWeek, $totalPeriods = 8) {
         $busyCount = $this->pdo->prepare("
             SELECT COUNT(*) FROM timetable 
@@ -105,13 +95,11 @@ class Timetable {
     }
 
     public function add($teacherId, $classId, $subjectId, $day, $period, $groupName = null) {
-        // Check if group_name column exists
         $hasGroupName = false;
         try {
             $checkStmt = $this->pdo->query("SHOW COLUMNS FROM timetable LIKE 'group_name'");
             $hasGroupName = $checkStmt->rowCount() > 0;
         } catch (Exception $e) {
-            // Column doesn't exist
         }
         
         if ($hasGroupName) {
@@ -134,15 +122,12 @@ class Timetable {
         return $stmt->execute([$id]);
     }
 
-    // Update an entry (usually only class/subject changes for a fixed slot)
     public function update($id, $classId, $subjectId, $groupName = null) {
-        // Check if group_name column exists
         $hasGroupName = false;
         try {
             $checkStmt = $this->pdo->query("SHOW COLUMNS FROM timetable LIKE 'group_name'");
             $hasGroupName = $checkStmt->rowCount() > 0;
         } catch (Exception $e) {
-            // Column doesn't exist
         }
         
         if ($hasGroupName) {

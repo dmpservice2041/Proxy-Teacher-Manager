@@ -3,7 +3,6 @@ require_once 'config/app.php';
 require_once 'models/User.php';
 require_once 'services/MailService.php';
 
-// Fetch school settings for branding
 $schoolName = defined('SCHOOL_NAME') ? SCHOOL_NAME : 'Proxy System';
 $schoolLogo = null;
 
@@ -25,7 +24,6 @@ try {
 $error = '';
 $success = '';
 
-// Handle Login
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
     $username = $_POST['username'] ?? '';
     $password = $_POST['password'] ?? '';
@@ -44,7 +42,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
     }
 }
 
-// Handle Forgot Password
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_reset'])) {
     // DEBUG: Remove after fixing
     error_log("Reset requested for: " . $_POST['email']);
@@ -80,7 +77,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_reset'])) {
             $error = "Error: " . $e->getMessage();
         }
     } else {
-        // Security: Don't reveal if user exists, but for UX we might say "If account exists..."
         // For now, simple message
         $success = "If an account matches that email, a reset link has been sent.";
     }
