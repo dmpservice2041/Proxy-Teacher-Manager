@@ -619,8 +619,69 @@ $schoolPincode = $settingsModel->get('school_pincode', '');
                     </div>
                 </form>
             <?php elseif ($activeTab === 'email'): ?>
-                <!-- ... (Email content same as before) ... -->
-                <!-- (Skipping re-writing email content for brevity, just keeping insertion point) -->
+                <div class="section-title">Email Configuration (SMTP)</div>
+                <div class="section-desc">Configure SMTP settings for sending system emails (e.g. password resets).</div>
+                
+                <?php
+                    $smtpHost = $settingsModel->get('smtp_host', '');
+                    $smtpPort = $settingsModel->get('smtp_port', '587');
+                    $smtpUser = $settingsModel->get('smtp_username', '');
+                    $smtpPass = $settingsModel->get('smtp_password', '');
+                    $smtpFromName = $settingsModel->get('smtp_from_name', $schoolName);
+                ?>
+
+                <form method="POST">
+                    <input type="hidden" name="update_smtp_settings" value="1">
+                    
+                    <div class="alert alert-secondary border-0 bg-light d-flex mb-4">
+                        <i class="fas fa-server mt-1 me-2 text-secondary"></i>
+                        <div class="small text-dark">
+                            <strong>Note:</strong> Most providers (Gmail, Outlook) require an App Password if 2FA is enabled.
+                        </div>
+                    </div>
+
+                    <div class="row mb-4">
+                        <div class="col-md-8">
+                            <label class="form-label">SMTP Host</label>
+                            <input type="text" name="smtp_host" class="form-control font-monospace" value="<?php echo htmlspecialchars($smtpHost); ?>" placeholder="smtp.gmail.com" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Port</label>
+                            <input type="number" name="smtp_port" class="form-control font-monospace" value="<?php echo htmlspecialchars($smtpPort); ?>" placeholder="587" required>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                             <label class="form-label">SMTP Username (Email)</label>
+                             <input type="email" name="smtp_username" class="form-control" value="<?php echo htmlspecialchars($smtpUser); ?>" required>
+                        </div>
+                        <div class="col-md-6">
+                             <label class="form-label">SMTP Password</label>
+                             <div class="input-group">
+                                <input type="password" name="smtp_password" id="smtpPass" class="form-control" value="<?php echo htmlspecialchars($smtpPass); ?>" required>
+                                <button class="btn btn-outline-secondary" type="button" onclick="const p = document.getElementById('smtpPass'); p.type = p.type === 'password' ? 'text' : 'password';">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                             </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label">From Name</label>
+                        <input type="text" name="smtp_from_name" class="form-control" value="<?php echo htmlspecialchars($smtpFromName); ?>" required>
+                        <div class="form-text">The name displayed in the "From" field of emails.</div>
+                    </div>
+                    
+                    <div class="d-flex justify-content-end mt-4">
+                         <button type="submit" class="btn btn-save btn-primary text-white">
+                             <i class="fas fa-save me-2"></i> Save Email Settings
+                         </button>
+                    </div>
+                    </form>
+                    
+                    <!-- Legacy Placeholder (Ignore below) -->
+                    <div style="display:none;">
                  <div class="section-title">Email Configuration (SMTP)</div>
                  <!-- ... content ... -->
                  <div class="d-flex justify-content-end mt-4">

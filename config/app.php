@@ -64,24 +64,33 @@ function logError($exception, $context = '') {
     $logFile = __DIR__ . '/../logs/error.log';
     $logDir = dirname($logFile);
     
-    // Ensure log directory exists
-    if (!is_dir($logDir)) {
-        mkdir($logDir, 0755, true);
+    try {
+        // Ensure log directory exists
+        if (!is_dir($logDir)) {
+            @mkdir($logDir, 0755, true);
+        }
+        
+        $timestamp = date('Y-m-d H:i:s');
+        $message = $exception->getMessage();
+        $file = $exception->getFile();
+        $line = $exception->getLine();
+        $trace = $exception->getTraceAsString();
+        
+        $logEntry = "[{$timestamp}] {$context}\n";
+        $logEntry .= "Error: {$message}\n";
+        $logEntry .= "File: {$file}:{$line}\n";
+        $logEntry .= "Stack Trace:\n{$trace}\n";
+        $logEntry .= str_repeat('-', 80) . "\n";
+        
+        if (!@error_log($logEntry, 3, $logFile)) {
+             // Fallback if custom log fails
+             throw new Exception("Could not write to log file");
+        }
+    } catch (Throwable $e) {
+        // Fallback to server's default error log if file logging fails
+        error_log("Proxy System Error (Logging Failed): " . $exception->getMessage());
+        error_log("Original Context: " . $context);
     }
-    
-    $timestamp = date('Y-m-d H:i:s');
-    $message = $exception->getMessage();
-    $file = $exception->getFile();
-    $line = $exception->getLine();
-    $trace = $exception->getTraceAsString();
-    
-    $logEntry = "[{$timestamp}] {$context}\n";
-    $logEntry .= "Error: {$message}\n";
-    $logEntry .= "File: {$file}:{$line}\n";
-    $logEntry .= "Stack Trace:\n{$trace}\n";
-    $logEntry .= str_repeat('-', 80) . "\n";
-    
-    error_log($logEntry, 3, $logFile);
     
     // Return generic error message for user
     return "An error occurred. Please try again or contact support.";
