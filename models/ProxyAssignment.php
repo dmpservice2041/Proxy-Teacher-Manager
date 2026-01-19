@@ -9,8 +9,12 @@ class ProxyAssignment {
     }
 
     public function assign($date, $absentTeacherId, $proxyTeacherId, $classId, $periodNo, $mode = 'AUTO', $ruleApplied = '', $subjectId = null) {
+        $startedTransaction = false;
         try {
-            $this->pdo->beginTransaction();
+            if (!$this->pdo->inTransaction()) {
+                $this->pdo->beginTransaction();
+                $startedTransaction = true;
+            }
 
             $sql = "DELETE FROM proxy_assignments WHERE date = ? AND absent_teacher_id = ? AND class_id = ? AND period_no = ?";
             $params = [$date, $absentTeacherId, $classId, $periodNo];
@@ -37,10 +41,14 @@ class ProxyAssignment {
             ");
             $logStmt->execute([$assignmentId, $source, "Assigned proxy via $mode using rule: $ruleApplied"]);
 
-            $this->pdo->commit();
+            if ($startedTransaction) {
+                $this->pdo->commit();
+            }
             return $assignmentId;
         } catch (Exception $e) {
-            $this->pdo->rollBack();
+            if ($startedTransaction && $this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
             throw $e;
         }
     }
@@ -73,18 +81,26 @@ class ProxyAssignment {
     }
 
     public function deleteAllForDate($date) {
+        $startedTransaction = false;
         try {
-            $this->pdo->beginTransaction();
+            if (!$this->pdo->inTransaction()) {
+                $this->pdo->beginTransaction();
+                $startedTransaction = true;
+            }
             
             $stmt = $this->pdo->prepare("DELETE FROM proxy_assignments WHERE date = ?");
             $stmt->execute([$date]);
             
             $this->pdo->exec("DELETE FROM proxy_audit_logs WHERE proxy_assignment_id NOT IN (SELECT id FROM proxy_assignments)");
             
-            $this->pdo->commit();
+            if ($startedTransaction) {
+                $this->pdo->commit();
+            }
             return true;
         } catch (Exception $e) {
-            $this->pdo->rollBack();
+            if ($startedTransaction && $this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
             throw $e;
         }
     }

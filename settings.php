@@ -155,6 +155,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $message = "Successfully transferred {$transferredCount} timetable entries from source to target teacher.";
         }
         
+        // CLEAR TIMETABLE DATA
+        elseif (isset($_POST['clear_timetable'])) {
+            $pdo->beginTransaction();
+            $count = $pdo->exec("DELETE FROM timetable");
+            $pdo->commit();
+            $message = "Successfully cleared all timetable data ({$count} entries removed).";
+        }
+        
+        // CLEAR ATTENDANCE DATA
+        elseif (isset($_POST['clear_attendance'])) {
+            $pdo->beginTransaction();
+            $count = $pdo->exec("DELETE FROM teacher_attendance");
+            $pdo->exec("DELETE FROM api_sync_log");
+            $pdo->commit();
+            $message = "Successfully cleared all attendance data ({$count} entries removed).";
+        }
+        
+        // CLEAR PROXY ASSIGNMENTS
+        elseif (isset($_POST['clear_proxies'])) {
+            $pdo->beginTransaction();
+            $pdo->exec("DELETE FROM proxy_audit_logs");
+            $count = $pdo->exec("DELETE FROM proxy_assignments");
+            $pdo->commit();
+            $message = "Successfully cleared all proxy assignment data ({$count} entries removed).";
+        }
+        
+        // CLEAR ALL DATA (Academic Year Reset)
+        elseif (isset($_POST['clear_all_data'])) {
+            $pdo->beginTransaction();
+            $pdo->exec("DELETE FROM proxy_audit_logs");
+            $pdo->exec("DELETE FROM proxy_assignments");
+            $pdo->exec("DELETE FROM teacher_attendance");
+            $pdo->exec("DELETE FROM api_sync_log");
+            $pdo->exec("DELETE FROM daily_overrides");
+            $pdo->exec("DELETE FROM timetable");
+            $pdo->commit();
+            $message = "Successfully cleared all data for new academic year.";
+        }
+        
     } catch (Exception $e) {
         $error = "Error: " . $e->getMessage();
     }
@@ -370,6 +409,9 @@ $schoolPincode = $settingsModel->get('school_pincode', '');
                 </a>
                 <a href="?tab=transfer" class="settings-nav-link <?php echo $activeTab === 'transfer' ? 'active' : ''; ?>">
                     <i class="fas fa-exchange-alt me-3" style="width: 20px;"></i> Transfer Timetable
+                </a>
+                <a href="?tab=data" class="settings-nav-link <?php echo $activeTab === 'data' ? 'active' : ''; ?>">
+                    <i class="fas fa-database me-3" style="width: 20px;"></i> Data Management
                 </a>
             </div>
         </div>
@@ -597,7 +639,7 @@ $schoolPincode = $settingsModel->get('school_pincode', '');
             
             <!-- ERP TAB -->
             <?php elseif ($activeTab === 'erp'): ?>
-                <div class="section-title">ERP Integration (Entab)</div>
+                <div class="section-title">ERP Integration </div>
                 <div class="section-desc">Configure the destination API to push daily attendance data.</div>
                 
                 <?php
@@ -611,7 +653,7 @@ $schoolPincode = $settingsModel->get('school_pincode', '');
                     <div class="alert alert-warning border-0 bg-soft-warning d-flex mb-4">
                         <i class="fas fa-exclamation-triangle mt-1 me-2 text-warning"></i>
                         <div class="small text-dark">
-                            This integration pushes "Present" records to your ERP (Entab) as punch data.
+                            This integration pushes "Present" records to your ERP as punch data.
                         </div>
                     </div>
 
@@ -860,6 +902,123 @@ $schoolPincode = $settingsModel->get('school_pincode', '');
                          </button>
                     </div>
                 </form>
+            
+            <!-- DATA MANAGEMENT TAB -->
+            <?php elseif ($activeTab === 'data'): ?>
+                <div class="section-title">Data Management</div>
+                <div class="section-desc">Clear data to prepare for a new academic year or session.</div>
+                
+                <div class="alert alert-danger border-0 bg-danger bg-opacity-10 d-flex mb-4">
+                    <i class="fas fa-exclamation-triangle mt-1 me-2 text-danger"></i>
+                    <div class="small text-dark">
+                        <strong>Warning:</strong> These actions will permanently delete data and cannot be undone. 
+                        Make sure to export any reports you need before clearing data.
+                    </div>
+                </div>
+                
+                <div class="row g-4">
+                    <!-- Clear Timetable -->
+                    <div class="col-md-6">
+                        <div class="card h-100 border">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center mb-3">
+                                    <div class="rounded-circle bg-warning bg-opacity-10 p-3 me-3">
+                                        <i class="fas fa-calendar-alt text-warning"></i>
+                                    </div>
+                                    <div>
+                                        <h6 class="mb-0 fw-bold">Timetable Data</h6>
+                                        <small class="text-muted">All teacher schedules</small>
+                                    </div>
+                                </div>
+                                <p class="text-muted small mb-3">Clear all timetable entries. You can then import a new timetable for the upcoming academic year.</p>
+                                <form method="POST" id="clearTimetableForm">
+                                    <input type="hidden" name="clear_timetable" value="1">
+                                    <button type="button" class="btn btn-outline-warning w-100" onclick="confirmClear('timetable', 'Timetable Data')">
+                                        <i class="fas fa-trash-alt me-2"></i>Clear Timetable
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Clear Attendance -->
+                    <div class="col-md-6">
+                        <div class="card h-100 border">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center mb-3">
+                                    <div class="rounded-circle bg-info bg-opacity-10 p-3 me-3">
+                                        <i class="fas fa-user-check text-info"></i>
+                                    </div>
+                                    <div>
+                                        <h6 class="mb-0 fw-bold">Attendance Data</h6>
+                                        <small class="text-muted">All attendance records</small>
+                                    </div>
+                                </div>
+                                <p class="text-muted small mb-3">Clear all teacher attendance records and API sync logs. Start fresh for the new session.</p>
+                                <form method="POST" id="clearAttendanceForm">
+                                    <input type="hidden" name="clear_attendance" value="1">
+                                    <button type="button" class="btn btn-outline-info w-100" onclick="confirmClear('attendance', 'Attendance Data')">
+                                        <i class="fas fa-trash-alt me-2"></i>Clear Attendance
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Clear Proxy Assignments -->
+                    <div class="col-md-6">
+                        <div class="card h-100 border">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center mb-3">
+                                    <div class="rounded-circle bg-secondary bg-opacity-10 p-3 me-3">
+                                        <i class="fas fa-exchange-alt text-secondary"></i>
+                                    </div>
+                                    <div>
+                                        <h6 class="mb-0 fw-bold">Proxy Assignments</h6>
+                                        <small class="text-muted">All proxy allocation history</small>
+                                    </div>
+                                </div>
+                                <p class="text-muted small mb-3">Clear all proxy assignment records and audit logs from previous sessions.</p>
+                                <form method="POST" id="clearProxiesForm">
+                                    <input type="hidden" name="clear_proxies" value="1">
+                                    <button type="button" class="btn btn-outline-secondary w-100" onclick="confirmClear('proxies', 'Proxy Assignments')">
+                                        <i class="fas fa-trash-alt me-2"></i>Clear Proxy Data
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Clear All (Academic Year Reset) -->
+                    <div class="col-md-6">
+                        <div class="card h-100 border border-danger">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center mb-3">
+                                    <div class="rounded-circle bg-danger bg-opacity-10 p-3 me-3">
+                                        <i class="fas fa-bomb text-danger"></i>
+                                    </div>
+                                    <div>
+                                        <h6 class="mb-0 fw-bold text-danger">Full Reset</h6>
+                                        <small class="text-muted">Complete academic year reset</small>
+                                    </div>
+                                </div>
+                                <p class="text-muted small mb-3">Clear <strong>ALL</strong> data: timetable, attendance, proxy assignments, and daily overrides. Master data (teachers, classes, subjects) will be preserved.</p>
+                                <form method="POST" id="clearAllForm">
+                                    <input type="hidden" name="clear_all_data" value="1">
+                                    <button type="button" class="btn btn-danger w-100" onclick="confirmClear('all', 'ALL Data')">
+                                        <i class="fas fa-radiation me-2"></i>Full Academic Reset
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="alert alert-info border-0 bg-info bg-opacity-10 mt-4">
+                    <i class="fas fa-lightbulb me-2 text-info"></i>
+                    <strong>Tip:</strong> Master data (Teachers, Classes, Subjects, Sections) is preserved during all clear operations. 
+                    You only need to manage these if staff or class structure changes.
+                </div>
             <?php endif; ?>
 
             
@@ -941,6 +1100,33 @@ $(document).ready(function() {
         $('#transferForm').submit();
     });
 });
+
+// Data Management - Confirmation Handler
+function confirmClear(type, label) {
+    const confirmed = confirm(
+        `⚠️ WARNING: You are about to permanently delete ${label}.\n\n` +
+        `This action CANNOT be undone!\n\n` +
+        `Are you sure you want to proceed?`
+    );
+    
+    if (confirmed) {
+        const doubleConfirm = confirm(
+            `🚨 FINAL CONFIRMATION\n\n` +
+            `Type: ${label}\n\n` +
+            `Click OK to DELETE this data permanently.`
+        );
+        
+        if (doubleConfirm) {
+            const formMap = {
+                'timetable': 'clearTimetableForm',
+                'attendance': 'clearAttendanceForm',
+                'proxies': 'clearProxiesForm',
+                'all': 'clearAllForm'
+            };
+            document.getElementById(formMap[type]).submit();
+        }
+    }
+}
 </script>
 
 </body>

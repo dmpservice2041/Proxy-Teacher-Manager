@@ -63,7 +63,7 @@ try {
                 <x:VerticalResolution>600</x:VerticalResolution>
               </x:Print>
               <x:PageSetup>
-                <x:Layout x:Orientation="Landscape"/>
+                <x:Layout x:Orientation="Portrait"/>
               </x:PageSetup>
             </x:WorksheetOptions>
           </x:ExcelWorksheet>
@@ -74,19 +74,40 @@ try {
     echo '<style>
         body { background-color: #FFFFFF; font-family: Calibri, Arial, sans-serif; font-size: 11px; }
         table { border-collapse: collapse; width: 100%; table-layout: fixed; }
-        th, td { border: 1px solid #999; padding: 5px; text-align: left; vertical-align: middle; white-space: normal; word-wrap: break-word; }
-        th { background-color: #4F46E5; color: white; font-weight: bold; text-align: center; }
-        .header-main { background-color: #f3f4f6; color: #111827; font-size: 16px; font-weight: bold; border: none; text-align: center; padding: 15px; }
+        th, td { border: 1px solid #000000; padding: 5px; text-align: left; vertical-align: middle; white-space: normal; word-wrap: break-word; }
+        th { background-color: #f3f4f6; color: #000000; font-weight: bold; text-align: left; }
+        tr.data-row { height: 40px; } /* Double height rows */
+        .header-school { font-size: 16px; font-weight: bold; text-align: center; border: 1px solid #000000; background-color: #FFFFFF; }
+        .header-report { font-size: 14px; font-weight: bold; text-align: center; border: 1px solid #000000; background-color: #FFFFFF; }
         .text-center { text-align: center; }
     </style>';
     echo '</head>';
     echo '<body>';
 
     echo '<table>';
+    
+    // Column Widths
+    echo '<col width="80" />';  // Date (Reduced)
+    echo '<col width="50" />';  // Period
+    echo '<col width="100" />'; // Class
+    echo '<col width="100" />'; // Subject
+    echo '<col width="150" />'; // Absent Teacher
+    echo '<col width="150" />'; // Proxy Teacher
+    echo '<col width="200" />'; // Sign (Increased)
 
-    // Report Title
+    $displayDate = "";
+    if ($reportType === 'daily') {
+         $displayDate = date('d-m-Y', strtotime($date));
+    } else {
+         $displayDate = date('d-m-Y', strtotime($startDate)) . " to " . date('d-m-Y', strtotime($endDate));
+    }
+
+    // Report Title Rows
     echo '<tr>';
-    echo '<td colspan="8" class="header-main">' . $title . '</td>';
+    echo '<td colspan="7" class="header-school">St. Mary\'s English School - Bhavnagar</td>';
+    echo '</tr>';
+    echo '<tr>';
+    echo '<td colspan="7" class="header-report">Daily Proxy Report - ' . $displayDate . '</td>';
     echo '</tr>';
 
     // Table Header
@@ -97,28 +118,26 @@ try {
     echo '<th>Subject</th>';
     echo '<th>Absent Teacher</th>';
     echo '<th>Proxy Teacher</th>';
-    echo '<th>Mode</th>';
-    echo '<th>Note</th>';
+    echo '<th>Sign</th>';
     echo '</tr>';
 
     if (empty($data)) {
-        echo '<tr><td colspan="8" class="text-center" style="padding: 20px;">No records found for the selected criteria.</td></tr>';
+        echo '<tr><td colspan="7" class="text-center" style="padding: 20px;">No records found for the selected criteria.</td></tr>';
     } else {
         foreach ($data as $row) {
-            $modeDetail = $row['mode'];
-            if ($row['rule_applied']) {
-                $modeDetail .= " (" . $row['rule_applied'] . ")";
-            }
             
-            echo '<tr>';
-            echo '<td class="text-center">' . date('d-M-Y', strtotime($row['date'])) . '</td>';
+            // Remove section name (content in parentheses) and any stray parentheses
+            $className = trim(strtok($row['class_name'], '('));
+            $className = str_replace(')', '', $className);
+
+            echo '<tr class="data-row">';
+            echo '<td>' . date('d-m-Y', strtotime($row['date'])) . '</td>';
             echo '<td class="text-center">' . $row['period_no'] . '</td>';
-            echo '<td class="text-center"><b>' . $row['class_name'] . '</b></td>';
+            echo '<td>' . $className . '</td>';
             echo '<td>' . ($row['subject_name'] ?? '-') . '</td>';
-            echo '<td>' . $row['absent_teacher_name'] . '</td>';
-            echo '<td><b>' . $row['proxy_teacher_name'] . '</b></td>';
-            echo '<td class="text-center">' . $modeDetail . '</td>';
-            echo '<td>' . ($row['notes'] ?? '-') . '</td>'; 
+            echo '<td>' . strtoupper($row['absent_teacher_name']) . '</td>';
+            echo '<td>' . strtoupper($row['proxy_teacher_name']) . '</td>';
+            echo '<td></td>'; // Empty Sign column
             echo '</tr>';
         }
     }

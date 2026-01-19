@@ -18,6 +18,7 @@ class ProxyAllocationService {
     // Bulk Preloading Cache
     private $isBulkMode = false;
     private $cacheDate = null;
+    private $allTeachersCache = [];
     private $attendanceCache = [];
     private $timetableCache = [];
     private $teacherClassesCache = [];
@@ -65,7 +66,10 @@ class ProxyAllocationService {
         $dayOfWeek = date('N', strtotime($date));
         $dayName = date('l', strtotime($date));
 
-        // 1. Preload Attendance
+        // 1. Preload All Active Teachers
+        $this->allTeachersCache = $this->teacherModel->getAllActive();
+
+        // 2. Preload Attendance
         $stmt = $this->pdo->prepare("SELECT teacher_id FROM teacher_attendance WHERE date = ? AND status = 'Present'");
         $stmt->execute([$date]);
         $rows = $stmt->fetchAll(PDO::FETCH_COLUMN, 0);
@@ -144,7 +148,7 @@ class ProxyAllocationService {
             return [];
         }
 
-        $allTeachers = $this->teacherModel->getAllActive();
+        $allTeachers = $this->isBulkMode ? $this->allTeachersCache : $this->teacherModel->getAllActive();
         $candidates = [];
 
         $totalPeriods = $this->settingsModel->get('total_periods', 8);
@@ -457,85 +461,104 @@ class ProxyAllocationService {
         $assignedInPeriod = []; // [period_no => [teacher_id => true]]
         $assignedCount = [];    // [teacher_id => count]
 
+        // 0. Pre-populate busy teachers from EXISTING assignments (Manual or previous)
         foreach ($emptySlots as $slot) {
             if (!empty($slot['assigned_proxy_id'])) {
-                continue; // Already assigned
-            }
-            if ($slot['is_group_class']) {
-                 // Optional: Skip complex group classes
-            }
-            
-            // Note: This fetches from DB, so it doesn't know about assignments we just made in variables
-            $candidates = $this->getAvailableCandidates($date, $slot['period_no']);
-            
-            if (empty($candidates)) {
-                $details[] = "Slot {$slot['standard']}-{$slot['division']} (Per {$slot['period_no']}): No candidates found.";
-                continue;
-            }
-            
-            // FILTER & SCORE CANDIDATES
-            $validCandidates = [];
-            
-            foreach ($candidates as $cand) {
-                $tid = $cand['id'];
+                // Find who is assigned?
+                // getAbsentSlots returns assigned_proxy_id. 
+                // We need the ID of the proxy teacher.
+                // Wait, getAbsentSlots logic gets existingAssignments map [key => proxy_teacher_id]. 
+                // So assigned_proxy_id IS the teacher ID.
+                $pid = $slot['assigned_proxy_id'];
+                $assignedInPeriod[$slot['period_no']][$pid] = true;
                 
-                // CHECK 1: DOUBLE BOOKING IN THIS RUN
-                if (isset($assignedInPeriod[$slot['period_no']][$tid])) {
-                    continue; // Already assigned in this period during this run
+                if (!isset($assignedCount[$pid])) $assignedCount[$pid] = 0;
+                $assignedCount[$pid]++;
+            }
+        }
+
+        // Begin transaction for atomic bulk operation
+        $this->pdo->beginTransaction();
+        
+        try {
+            foreach ($emptySlots as $slot) {
+                if (!empty($slot['assigned_proxy_id'])) {
+                    continue; // Already assigned
+                }
+                if ($slot['is_group_class']) {
+                     // Optional: Skip complex group classes
                 }
                 
-                // CHECK 2: LOAD & MINIMUM FREE RULE
-                // Current Free in DB: $cand['free_periods']
-                // Less: Assignments made in this run: $assignedCount[$tid]
-                $currentAssignments = $assignedCount[$tid] ?? 0;
-                $realFreePeriods = $cand['free_periods'] - $currentAssignments;
+                $candidates = $this->getAvailableCandidates($date, $slot['period_no']);
                 
-                // Rule: "if teacher has 1 free period then do not give them proxy"
-                // Meaning, must have at least 2 free periods to start with, or result must be >= 1?
-                // Usually means: Can only assign if remaining free AFTER this assignment would be >= 0?
-                // User said: "if teacher has 1 free period then do not give them proxy". 
-                // This implies they need to KEEP at least 1 free period? Or they simply are too busy?
-                if ($realFreePeriods <= 1) {
-                    continue; // Preservation Rule: Don't consume their last free period (or single free period)
+                if (empty($candidates)) {
+                    $details[] = "Slot {$slot['standard']}-{$slot['division']} (Per {$slot['period_no']}): No candidates found.";
+                    continue;
                 }
                 
-                $cand['real_free_periods'] = $realFreePeriods;
+                // FILTER & SCORE CANDIDATES
+                $validCandidates = [];
                 
-                // SCORE
-                $cand['score'] = $this->calculateScore(
-                    $cand, 
-                    $classPriorities[$slot['class_id']] ?? 99, 
-                    $slot['subject_id'], 
-                    $teacherPriorities, 
-                    $teacherSubjectsMap
-                );
+                foreach ($candidates as $cand) {
+                    $tid = $cand['id'];
+                    
+                    // CHECK 1: DOUBLE BOOKING IN THIS RUN
+                    if (isset($assignedInPeriod[$slot['period_no']][$tid])) {
+                        continue; // Already assigned in this period during this run
+                    }
+                    
+                    // CHECK 2: LOAD & MINIMUM FREE RULE
+                    // Current Free in DB: $cand['free_periods']
+                    // Less: Assignments made in this run: $assignedCount[$tid]
+                    $currentAssignments = $assignedCount[$tid] ?? 0;
+                    $realFreePeriods = $cand['free_periods'] - $currentAssignments;
+                    
+                    // Rule: "if teacher has 1 free period then do not give them proxy"
+                    // Meaning, must have at least 2 free periods to start with, or result must be >= 1?
+                    // Usually means: Can only assign if remaining free AFTER this assignment would be >= 0?
+                    // User said: "if teacher has 1 free period then do not give them proxy". 
+                    // This implies they need to KEEP at least 1 free period? Or they simply are too busy?
+                    if ($realFreePeriods <= 1) {
+                        continue; // Preservation Rule: Don't consume their last free period (or single free period)
+                    }
+                    
+                    // Update free_periods to reflect assignments made in this batch run
+                    $cand['free_periods'] = $realFreePeriods;
+                    
+                    // SCORE
+                    $cand['score'] = $this->calculateScore(
+                        $cand, 
+                        $classPriorities[$slot['class_id']] ?? 99, 
+                        $slot['subject_id'], 
+                        $teacherPriorities, 
+                        $teacherSubjectsMap
+                    );
+                    
+                    $validCandidates[] = $cand;
+                }
                 
-                $validCandidates[] = $cand;
-            }
-            
-            if (empty($validCandidates)) {
-                $details[] = "Slot {$slot['standard']}-{$slot['division']} (Per {$slot['period_no']}): All candidates filtered out by rules.";
-                continue;
-            }
-            
-            // Sort by Score DESC
-            usort($validCandidates, function($a, $b) {
-                return $b['score'] <=> $a['score'];
-            });
-            
-            $bestCandidate = $validCandidates[0];
-            
-            // THRESHOLD CHECK
-            // With floating teachers (35 base) + free periods (up to 8) = ~43 max without subject
-            // With subject match: 35 + 50 + periods = ~93
-            // Lowered threshold to 20 to allow more flexibility
-            if ($bestCandidate['score'] < 20) {
-                $details[] = "Slot {$slot['standard']}-{$slot['division']} (Per {$slot['period_no']}): Best candidate {$bestCandidate['name']} score {$bestCandidate['score']} too low.";
-                continue;
-            }
-            
-            // ALLOCATE
-            try {
+                if (empty($validCandidates)) {
+                    $details[] = "Slot {$slot['standard']}-{$slot['division']} (Per {$slot['period_no']}): All candidates filtered out by rules.";
+                    continue;
+                }
+                
+                // Sort by Score DESC
+                usort($validCandidates, function($a, $b) {
+                    return $b['score'] <=> $a['score'];
+                });
+                
+                $bestCandidate = $validCandidates[0];
+                
+                // THRESHOLD CHECK
+                // With floating teachers (35 base) + free periods (up to 8) = ~43 max without subject
+                // With subject match: 35 + 50 + periods = ~93
+                // Lowered threshold to 20 to allow more flexibility
+                if ($bestCandidate['score'] < 20) {
+                    $details[] = "Slot {$slot['standard']}-{$slot['division']} (Per {$slot['period_no']}): Best candidate {$bestCandidate['name']} score {$bestCandidate['score']} too low.";
+                    continue;
+                }
+                
+                // ALLOCATE
                 $this->proxyModel->assign(
                     $date,
                     $slot['teacher_id'], // Absent Teacher
@@ -555,16 +578,26 @@ class ProxyAllocationService {
                 $assignedCount[$tid]++;
                 
                 $details[] = "Assigned {$bestCandidate['name']} to {$slot['standard']}-{$slot['division']} (Score: {$bestCandidate['score']}).";
-                
-            } catch (Exception $e) {
-                $details[] = "Error allocating {$slot['standard']}-{$slot['division']}: " . $e->getMessage();
             }
+            
+            // All assignments successful - commit transaction
+            $this->pdo->commit();
+            
+            return [
+                'success' => true,
+                'count' => $assignmentsMade,
+                'details' => $details
+            ];
+            
+        } catch (Exception $e) {
+            // Rollback all assignments on any failure
+            $this->pdo->rollBack();
+            
+            return [
+                'success' => false,
+                'count' => 0,
+                'details' => ["Transaction rolled back: " . $e->getMessage()]
+            ];
         }
-        
-        return [
-            'success' => true,
-            'count' => $assignmentsMade,
-            'details' => $details
-        ];
     }
 }

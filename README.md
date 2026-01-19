@@ -99,7 +99,6 @@ This system automates the process of assigning substitute (proxy) teachers when 
    ```bash
    chmod 755 assets/uploads
    chmod 755 exports
-   chmod 644 proxy_teacher.db
    ```
 
 6. **Access the application**
