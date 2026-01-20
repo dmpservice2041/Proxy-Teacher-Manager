@@ -161,7 +161,7 @@ class ProxyAssignment {
             $params[] = $filters['class_id'];
         }
         
-        $sql .= " ORDER BY pa.date ASC, pa.period_no ASC";
+        $sql .= " ORDER BY pa.date ASC, t1.name ASC, pa.period_no ASC";
         
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute($params);
